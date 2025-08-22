@@ -226,28 +226,35 @@ Options:
 All sample data is included in the `./sample-data/` directory:
 
 ### Healthcare Dataset (`healthcare_dataset.csv`)
+- **Source**: [Kaggle Healthcare Dataset](https://www.kaggle.com/datasets/prasad22/healthcare-dataset)
 - **Size**: 55,000+ patient records
 - **Fields**: Patient demographics, prescriptions, medical conditions
 - **Usage**: Prescription matching and bias detection
 - **Privacy**: Contains synthetic PHI for redaction testing
 
 ### Barcode Images (`bar-codes/`)
+- **Source**: ZXing test barcode images (PNG/JPEG)
 - **Types**: QR Code, Code128, Code39, DataMatrix, EAN13, ITF
 - **Format**: PNG images with embedded medication information
 - **Usage**: Prescription-to-medication matching validation
 - **Quality**: High-resolution test images for computer vision
 
 ### Video Data (`samples_data_vtest.avi`)
+- **Source**: Frames extracted from OpenCV vtest.avi
 - **Content**: Corridor navigation footage
 - **Usage**: Navigation analysis and robustness testing
 - **Processing**: Frame extraction every 7 frames for analysis
 - **Features**: Includes scenarios for occlusion testing
 
 ### MHealth Telemetry (`MHEALTHDATASET/`)
+- **Source**: [UCI MHEALTH Dataset](https://archive.ics.uci.edu/dataset/319/mhealth+dataset)
 - **Subjects**: 10 individuals with sensor data
 - **Sensors**: Accelerometer, gyroscope, magnetometer, ECG
+- **Sampling Rate**: 50 Hz across all modalities
+- **Activities**: 12 different physical activities (standing, walking, cycling, etc.)
 - **Usage**: Cart stability and safety monitoring
 - **Format**: Time-series CSV data with multiple sensor channels
+- **Sensor Placement**: Chest, right wrist, and left ankle positions
 
 ## Security Features
 
@@ -625,6 +632,58 @@ For technical support:
 2. **Search Issues**: Look for similar problems in the issue tracker
 3. **Create Issue**: Provide detailed error messages and system information
 4. **Security Issues**: Report privately for security-related problems
+
+## Citations
+
+This project uses the following datasets and resources:
+
+### MHEALTH Dataset
+```
+Banos, O., Garcia, R., & Saez, A. (2014). MHEALTH [Dataset]. 
+UCI Machine Learning Repository. https://doi.org/10.24432/C5TW22.
+```
+
+**Dataset Description**: The MHEALTH (Mobile Health) dataset comprises body motion and vital signs recordings for ten volunteers performing 12 physical activities. Sensors placed on the chest, right wrist, and left ankle measure acceleration, rate of turn, magnetic field orientation, and ECG signals at 50 Hz sampling rate.
+
+**Original Paper**: 
+```
+O. Baños, Rafael García, J. A. H. Terriza, M. Damas, H. Pomares, I. Rojas, 
+Alejandro Saez, Claudia Villalonga. (2014). mHealthDroid: A Novel Framework 
+for Agile Development of Mobile Health Applications. International Workshop 
+on Ambient Assisted Living and Home Care.
+```
+
+### Healthcare Dataset
+```
+Healthcare Dataset. (2023). Kaggle. 
+Retrieved from https://www.kaggle.com/datasets/prasad22/healthcare-dataset
+```
+
+**Dataset Description**: Synthetic healthcare records containing patient demographics, medical conditions, medications, and treatment information. Used for testing PHI redaction and prescription matching algorithms.
+
+### Barcode Test Images
+```
+ZXing Project. ZXing Test Barcode Images (PNG/JPEG format).
+Multiple barcode formats: QR Code, Code128, Code39, DataMatrix, EAN13, ITF.
+```
+
+**Dataset Description**: High-resolution test barcode images in various standard formats used for prescription-to-medication matching validation and computer vision testing.
+
+### Video Navigation Data
+```
+OpenCV Sample Video Data. Frames extracted from vtest.avi.
+Corridor navigation footage for robustness testing.
+```
+
+**Dataset Description**: Video frames extracted from OpenCV test footage showing corridor navigation scenarios. Used for navigation analysis, obstacle detection, and robustness testing under occlusion conditions.
+
+### Additional Resources
+
+**License**: Both datasets are used under their respective open licenses:
+- MHEALTH Dataset: [Creative Commons Attribution 4.0 International (CC BY 4.0)](https://creativecommons.org/licenses/by/4.0/)
+- Healthcare Dataset: Available under Kaggle's open dataset terms
+
+**Acknowledgments**: We thank the original dataset creators and the UCI Machine Learning Repository for making these valuable datasets available for research and development.
 
 ## License
 
