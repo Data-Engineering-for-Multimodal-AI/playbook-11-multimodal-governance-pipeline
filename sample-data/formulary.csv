@@ -1,0 +1,5 @@
+barcode_format,barcode_value,medication,pack
+EAN-13,9780201310054,Aspirin,100 x 81 mg tablets
+ITF,05012345678900,Paracetamol,case of 24 x 500 mg packs
+Code 39,429250,Ibuprofen,50 x 200 mg tablets
+Code 128,Code 128,Penicillin,20 x 250 mg capsules
