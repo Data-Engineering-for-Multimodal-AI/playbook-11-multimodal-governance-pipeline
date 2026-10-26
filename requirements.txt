@@ -1,19 +1,12 @@
-opencv-python==4.8.1.78
-pillow==10.0.1
-pandas==2.0.3
-numpy==1.24.3
-pyzxing==0.7
-cryptography==41.0.7
-sqlite3-to-pandas==1.0.0
-scikit-learn==1.3.0
-hashlib
-pathlib
-json
-argparse
-logging
-datetime
-uuid
-re
-os
-sys
-warnings
+# Generated from uv.lock by: uv export --format requirements-txt --no-dev --no-hashes --no-emit-project
+# Python >= 3.12. Edit pyproject.toml, then run 'uv lock' and re-export; don't edit this file by hand.
+cffi==2.1.1 ; platform_python_implementation != 'PyPy'
+cryptography==50.0.2
+numpy==2.5.4
+opencv-contrib-python-headless==5.0.0.93
+pandas==3.1.0
+pycparser==3.12 ; implementation_name != 'PyPy' and platform_python_implementation != 'PyPy'
+python-dateutil==3.0.0
+six==1.17.0
+tzdata==2026.5
+zxing-cpp==3.1.1

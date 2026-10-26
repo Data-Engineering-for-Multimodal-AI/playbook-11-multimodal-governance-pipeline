@@ -1,0 +1,42 @@
+name: smoke
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12", "3.13"]
+    env:
+      UV_PYTHON: ${{ matrix.python-version }}
+      # Test values only: real keys come from a secrets store
+      MEDICAL_CART_ENCRYPTION_KEY: ci-test-passphrase
+      MEDICAL_CART_PSEUDONYM_KEY: ci-test-pseudonym-key
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.3.0
+      - name: Smoke test
+        run: make smoke
+      - name: Full run and lineage checks (shown in the README)
+        run: |
+          uv run python medical_cart_pipeline.py
+          uv run python verify_lineage.py
+          uv run python verify_lineage.py --tamper-demo
+      - name: Printed commands (pip install -r requirements.txt, every documented option)
+        run: |
+          uv venv --seed --python ${{ matrix.python-version }} /tmp/pipenv
+          /tmp/pipenv/bin/python -m pip install -q -r requirements.txt
+          /tmp/pipenv/bin/python medical_cart_pipeline.py --help
+          /tmp/pipenv/bin/python medical_cart_pipeline.py
+          /tmp/pipenv/bin/python medical_cart_pipeline.py --user-role medical_staff
+          /tmp/pipenv/bin/python medical_cart_pipeline.py --mode pipeline
+          /tmp/pipenv/bin/python medical_cart_pipeline.py --mode journey
+          /tmp/pipenv/bin/python medical_cart_pipeline.py --verbose > /dev/null
+          /tmp/pipenv/bin/python medical_cart_pipeline.py --user-role admin --verbose > /dev/null
+          /tmp/pipenv/bin/python medical_cart_pipeline.py --user-role cart_operator --mode pipeline
+          /tmp/pipenv/bin/python medical_cart_pipeline.py --user-role auditor --mode pipeline

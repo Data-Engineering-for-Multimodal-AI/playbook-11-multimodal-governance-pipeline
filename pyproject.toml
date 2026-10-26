@@ -1,0 +1,24 @@
+[project]
+name = "playbook-11-multimodal-governance-pipeline"
+version = "2026.10"
+description = "A governed multimodal pipeline for an autonomous medical cart: PHI redaction, encryption, tamper-evident lineage, label verification, navigation and telemetry checks, and responsible-AI audits (Data Engineering for Multimodal AI, Chapter 11)"
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.12"
+dependencies = [
+    "pandas>=2.2",
+    "numpy>=1.26",
+    # contrib: OpenCV 5 keeps the HOG person detector in the contrib build
+    "opencv-contrib-python-headless>=4.10",
+    "zxing-cpp>=2.3",
+    "cryptography>=44",
+]
+
+[dependency-groups]
+dev = ["pytest>=8"]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
