@@ -1,409 +1,291 @@
 """
 Report Generator for Medical Cart Pipeline
 
-Generates comprehensive audit reports in JSON and Markdown formats
-covering governance, security, and responsible AI assessments.
+Generates audit reports in JSON and Markdown formats covering governance, security,
+inference and responsible AI. Both are rendered from the same verdict, so they agree
+with each other and with the console.
 """
 
 import json
 import datetime
 from pathlib import Path
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any
 import logging
 
 logger = logging.getLogger(__name__)
 
+PIPELINE_VERSION = "2026.10"
+MARK = {'pass': 'PASS', 'warning': 'WARN', 'fail': 'FAIL'}
+
+
+def _pct(x) -> str:
+    return f"{x:.1%}" if isinstance(x, (int, float)) else "n/a"
+
+
+def _table(header: List[str], rows: List[List[Any]]) -> str:
+    lines = ["| " + " | ".join(header) + " |", "|" + "---|" * len(header)]
+    lines += ["| " + " | ".join(str(c) for c in row) + " |" for row in rows]
+    return "\n".join(lines) + "\n"
+
+
 class ReportGenerator:
-    """Generates comprehensive audit reports"""
-    
+    """Generates audit reports"""
+
     def __init__(self, reports_path: Path):
         self.reports_path = reports_path
         self.reports_path.mkdir(exist_ok=True)
-        
-    def generate_json_report(self, 
-                           pipeline_results: Dict[str, Any],
-                           governance_audit: Dict[str, Any],
-                           security_audit: Dict[str, Any],
-                           rai_assessment: Dict[str, Any]) -> str:
-        """Generate comprehensive JSON audit report"""
-        
-        timestamp = datetime.datetime.now().isoformat()
-        
+
+    def generate_json_report(self,
+                             pipeline_results: Dict[str, Any],
+                             governance_audit: Dict[str, Any],
+                             security_audit: Dict[str, Any],
+                             rai_assessment: Dict[str, Any],
+                             verdict: Dict[str, Any],
+                             run_id: str) -> str:
+        """Generate the machine-readable audit report"""
+
         report = {
             "audit_metadata": {
-                "report_id": f"medical_cart_audit_{timestamp.replace(':', '-').replace('.', '-')}",
-                "generation_timestamp": timestamp,
-                "pipeline_version": "1.0.0",
+                "report_id": f"medical_cart_audit_{run_id}",
+                "run_id": run_id,
+                "generation_timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                "pipeline_version": PIPELINE_VERSION,
                 "report_type": "comprehensive_audit"
             },
-            "executive_summary": self._generate_executive_summary(
-                pipeline_results, governance_audit, security_audit, rai_assessment
-            ),
+            "executive_summary": {
+                "overall_status": verdict['label'],
+                "counts": verdict['counts'],
+                "checks": verdict['checks'],
+            },
             "ingestion_results": pipeline_results.get('ingestion', {}),
             "governance_audit": governance_audit,
             "security_audit": security_audit,
             "inference_results": pipeline_results.get('inference', {}),
             "responsible_ai_assessment": rai_assessment,
-            "overall_assessment": self._generate_overall_assessment(
-                governance_audit, security_audit, rai_assessment
-            )
         }
-        
-        # Save JSON report
-        json_file = self.reports_path / f"audit_report_{timestamp.replace(':', '-').replace('.', '-')}.json"
+
+        json_file = self.reports_path / f"audit_report_{run_id}.json"
         with open(json_file, 'w') as f:
             json.dump(report, f, indent=2, default=str)
-        
-        logger.info(f"JSON report generated: {json_file}")
+
+        logger.info(f"JSON report generated: {json_file.name}")
         return str(json_file)
-    
+
     def generate_markdown_report(self,
-                               pipeline_results: Dict[str, Any],
-                               governance_audit: Dict[str, Any],
-                               security_audit: Dict[str, Any],
-                               rai_assessment: Dict[str, Any]) -> str:
-        """Generate human-readable Markdown audit report"""
-        
-        timestamp = datetime.datetime.now().isoformat()
-        
-        # Build markdown content
+                                 pipeline_results: Dict[str, Any],
+                                 governance_audit: Dict[str, Any],
+                                 security_audit: Dict[str, Any],
+                                 rai_assessment: Dict[str, Any],
+                                 verdict: Dict[str, Any],
+                                 run_id: str) -> str:
+        """Generate the human-readable audit report"""
+
+        inference = pipeline_results.get('inference', {})
         markdown_content = f"""# Medical Cart Pipeline Audit Report
 
-**Generated**: {timestamp}
-**Pipeline Version**: 1.0.0
-**Report Type**: Comprehensive System Audit
+**Run**: {run_id}
+**Generated**: {datetime.datetime.now(datetime.timezone.utc).isoformat(timespec='seconds')}
+**Pipeline Version**: {PIPELINE_VERSION}
 
 ## Executive Summary
 
-{self._generate_executive_summary_text(pipeline_results, governance_audit, security_audit, rai_assessment)}
+**Overall Status**: {verdict['label']} ({verdict['counts']['pass']} passed, {verdict['counts']['warning']} warnings, {verdict['counts']['fail']} failed)
 
+{_table(['Area', 'Check', 'Status', 'Detail'],
+        [[c['area'], c['check'], MARK[c['status']], c['detail']] for c in verdict['checks']])}
 ## Data Ingestion Assessment
 
-### Multimodal Data Processing
 {self._format_ingestion_results(pipeline_results.get('ingestion', {}))}
-
-## Governance and Lineage Audit
-
-### Data Lineage Tracking
-{self._format_governance_audit(governance_audit)}
-
 ## Security Assessment
 
-### PHI Protection and Access Control
 {self._format_security_audit(security_audit)}
+## Governance and Lineage Audit
 
+{self._format_governance_audit(governance_audit)}
 ## Inference Results
 
-### Prescription Matching and Navigation Analysis
-{self._format_inference_results(pipeline_results.get('inference', {}))}
-
+{self._format_inference_results(inference)}
 ## Responsible AI Assessment
 
-### Bias Detection, Explainability, and Robustness
 {self._format_rai_assessment(rai_assessment)}
-
-## Overall System Assessment
-
-{self._format_overall_assessment(governance_audit, security_audit, rai_assessment)}
-
 ## Recommendations
 
-{self._generate_recommendations(governance_audit, security_audit, rai_assessment)}
-
+{self._generate_recommendations(verdict, inference, rai_assessment)}
 ---
 *Report generated by Medical Cart Pipeline Audit System*
 """
-        
-        # Save Markdown report
-        md_file = self.reports_path / f"audit_report_{timestamp.replace(':', '-').replace('.', '-')}.md"
+
+        md_file = self.reports_path / f"audit_report_{run_id}.md"
         with open(md_file, 'w') as f:
             f.write(markdown_content)
-        
-        logger.info(f"Markdown report generated: {md_file}")
+
+        logger.info(f"Markdown report generated: {md_file.name}")
         return str(md_file)
-    
-    def _generate_executive_summary(self, pipeline_results, governance_audit, security_audit, rai_assessment) -> Dict[str, Any]:
-        """Generate executive summary data"""
-        
-        # Count successful components
-        ingestion_success = pipeline_results.get('ingestion', {}).get('overall_status') == 'success'
-        governance_pass = governance_audit.get('lineage_integrity', {}).get('status') == 'pass'
-        security_pass = security_audit.get('overall_security_status') == 'pass'
-        rai_good = rai_assessment.get('overall_assessment', {}).get('overall_status') in ['excellent', 'good']
-        
-        total_components = 4
-        passing_components = sum([ingestion_success, governance_pass, security_pass, rai_good])
-        
-        # Determine overall status
-        if passing_components == total_components:
-            overall_status = 'PASS'
-        elif passing_components >= total_components * 0.75:
-            overall_status = 'PASS_WITH_WARNINGS'
-        else:
-            overall_status = 'FAIL'
-        
-        return {
-            'overall_status': overall_status,
-            'passing_components': passing_components,
-            'total_components': total_components,
-            'pass_rate': passing_components / total_components,
-            'critical_issues': self._identify_critical_issues(governance_audit, security_audit, rai_assessment),
-            'key_metrics': {
-                'data_ingestion_success': ingestion_success,
-                'governance_compliance': governance_pass,
-                'security_compliance': security_pass,
-                'responsible_ai_status': rai_good
-            }
-        }
-    
-    def _generate_executive_summary_text(self, pipeline_results, governance_audit, security_audit, rai_assessment) -> str:
-        """Generate executive summary text"""
-        
-        summary = self._generate_executive_summary(pipeline_results, governance_audit, security_audit, rai_assessment)
-        
-        return f"""
-**Overall Status**: {summary['overall_status']}
 
-**Component Assessment**: {summary['passing_components']}/{summary['total_components']} components passing ({summary['pass_rate']:.1%})
-
-**Key Findings**:
-- Data Ingestion: {'Success' if summary['key_metrics']['data_ingestion_success'] else 'Failed'}
-- Governance: {'Compliant' if summary['key_metrics']['governance_compliance'] else 'Non-compliant'}
-- Security: {'Secure' if summary['key_metrics']['security_compliance'] else 'Security issues'}
-- Responsible AI: {'Good' if summary['key_metrics']['responsible_ai_status'] else 'Needs improvement'}
-
-{'**Critical Issues**: ' + str(len(summary['critical_issues'])) + ' identified' if summary['critical_issues'] else '**No critical issues identified**'}
-"""
-    
     def _format_ingestion_results(self, ingestion_results: Dict[str, Any]) -> str:
-        """Format ingestion results for markdown"""
-        
         if not ingestion_results:
-            return "**No ingestion data available**"
-        
-        status = ingestion_results.get('overall_status', 'unknown')
-        successful = ingestion_results.get('successful_modalities', 0)
-        total = ingestion_results.get('total_modalities', 0)
-        
-        results_text = f"**Status**: {status.upper()} ({successful}/{total} modalities)\n\n"
-        
-        if 'results' in ingestion_results:
-            for modality, result in ingestion_results['results'].items():
-                status = 'PASS' if result.get('status') == 'success' else 'FAIL'
-                results_text += f"- **{modality.title()}**: {status} ({result.get('status', 'unknown')})\n"
-                
-                if 'validation' in result:
-                    validation = result['validation']
-                    if 'total_records' in validation:
-                        results_text += f"  - Records: {validation['total_records']}\n"
-                    if 'phi_fields_detected' in validation:
-                        results_text += f"  - PHI fields detected: {len(validation['phi_fields_detected'])}\n"
-        
-        return results_text
-    
-    def _format_governance_audit(self, governance_audit: Dict[str, Any]) -> str:
-        """Format governance audit for markdown"""
-        
-        if not governance_audit:
-            return "**No governance audit data available**"
-        
-        lineage_status = governance_audit.get('lineage_integrity', {}).get('status', 'unknown')
-        events_count = governance_audit.get('lineage_events_count', 0)
-        
-        audit_text = f"**Lineage Integrity**: {lineage_status.upper()}\n"
-        audit_text += f"**Tracked Events**: {events_count}\n\n"
-        
-        if 'data_provenance' in governance_audit:
-            provenance = governance_audit['data_provenance']
-            audit_text += f"**Data Provenance**: {provenance.get('status', 'unknown').upper()}\n"
-            audit_text += f"- Source verification: {'PASS' if provenance.get('source_verified') else 'FAIL'}\n"
-            audit_text += f"- Processing chain complete: {'PASS' if provenance.get('chain_complete') else 'FAIL'}\n"
-        
-        return audit_text
-    
-    def _format_security_audit(self, security_audit: Dict[str, Any]) -> str:
-        """Format security audit for markdown"""
-        
-        if not security_audit:
-            return "**No security audit data available**"
-        
-        overall_status = security_audit.get('overall_security_status', 'unknown')
-        
-        audit_text = f"**Overall Security Status**: {overall_status.upper()}\n\n"
-        
-        # Access control
-        if 'access_control' in security_audit:
-            ac = security_audit['access_control']
-            audit_text += f"**Access Control**: {ac.get('status', 'unknown').upper()}\n"
-            audit_text += f"- Total access attempts: {ac.get('total_access_attempts', 0)}\n"
-            audit_text += f"- Failed attempts: {ac.get('failed_access_attempts', 0)}\n\n"
-        
-        # Encryption
-        if 'encryption' in security_audit:
-            enc = security_audit['encryption']
-            audit_text += f"**Encryption**: {enc.get('status', 'unknown').upper()}\n"
-            audit_text += f"- Encrypted files: {enc.get('encrypted_files_count', 0)}\n\n"
-        
-        # PHI protection
-        if 'phi_protection' in security_audit:
-            phi = security_audit['phi_protection']
-            audit_text += f"**PHI Protection**: {phi.get('status', 'unknown').upper()}\n"
-            audit_text += f"- Redaction applied: {'PASS' if phi.get('redaction_applied') else 'FAIL'}\n"
-        
-        return audit_text
-    
-    def _format_inference_results(self, inference_results: Dict[str, Any]) -> str:
-        """Format inference results for markdown"""
-        
-        if not inference_results:
-            return "**No inference results available**"
-        
-        results_text = ""
-        
-        # Prescription matching
-        if 'prescription_matching' in inference_results:
-            pm = inference_results['prescription_matching']['summary']
-            match_rate = pm.get('match_success_rate', 0)
-            results_text += f"**Prescription Matching**:\n"
-            results_text += f"- Success rate: {match_rate:.1%}\n"
-            results_text += f"- Confirmed matches: {pm.get('confirmed_matches', 0)}\n"
-            results_text += f"- Total medications: {pm.get('total_medications', 0)}\n\n"
-        
-        # Navigation analysis
-        if 'navigation_analysis' in inference_results:
-            nav = inference_results['navigation_analysis']['summary']
-            results_text += f"**Navigation Analysis**:\n"
-            results_text += f"- Status: {nav.get('navigation_status', 'unknown').upper()}\n"
-            results_text += f"- Frames processed: {nav.get('frames_processed', 0)}\n"
-            results_text += f"- Occlusion robustness: {nav.get('average_occlusion_robustness', 0):.2f}\n\n"
-        
-        # Telemetry analysis
-        if 'telemetry_analysis' in inference_results:
-            tel = inference_results['telemetry_analysis']['summary']
-            results_text += f"**Telemetry Analysis**:\n"
-            results_text += f"- Stability status: {tel.get('overall_stability_status', 'unknown').upper()}\n"
-            results_text += f"- Stable subjects: {tel.get('stable_subjects', 0)}/{tel.get('subjects_analyzed', 0)}\n"
-        
-        return results_text
-    
-    def _format_rai_assessment(self, rai_assessment: Dict[str, Any]) -> str:
-        """Format Responsible AI assessment for markdown"""
-        
-        if not rai_assessment:
-            return "**No Responsible AI assessment available**"
-        
-        overall = rai_assessment.get('overall_assessment', {})
-        
-        assessment_text = f"**Overall RAI Status**: {overall.get('overall_status', 'unknown').upper()}\n"
-        assessment_text += f"**Overall Score**: {overall.get('overall_score', 0):.2f}/1.00\n\n"
-        
-        # Component scores
-        assessment_text += f"**Component Scores**:\n"
-        assessment_text += f"- Bias detection: {overall.get('bias_score', 0):.2f}\n"
-        assessment_text += f"- Explainability: {overall.get('explainability_score', 0):.2f}\n"
-        assessment_text += f"- Robustness: {overall.get('robustness_score', 0):.2f}\n\n"
-        
-        # Explanations
-        if 'explainability_analysis' in rai_assessment:
-            exp = rai_assessment['explainability_analysis']
-            total_issues = exp.get('total_issues_explained', 0)
-            assessment_text += f"**Issues Identified**: {total_issues}\n"
-            
-            if total_issues > 0:
-                assessment_text += f"**Issue Breakdown**:\n"
-                issue_types = {}
-                for issue in exp.get('individual_explanations', []):
-                    issue_type = issue.get('type', 'unknown')
-                    issue_types[issue_type] = issue_types.get(issue_type, 0) + 1
-                
-                for issue_type, count in issue_types.items():
-                    assessment_text += f"- {issue_type.replace('_', ' ').title()}: {count}\n"
-        
-        return assessment_text
-    
-    def _format_overall_assessment(self, governance_audit, security_audit, rai_assessment) -> str:
-        """Format overall assessment for markdown"""
-        
-        summary = self._generate_executive_summary({}, governance_audit, security_audit, rai_assessment)
-        
-        assessment_text = f"**Final Status**: {summary['overall_status']}\n"
-        assessment_text += f"**Component Pass Rate**: {summary['pass_rate']:.1%}\n\n"
-        
-        if summary['critical_issues']:
-            assessment_text += f"**Critical Issues** ({len(summary['critical_issues'])}):\n"
-            for issue in summary['critical_issues']:
-                assessment_text += f"- {issue}\n"
-        else:
-            assessment_text += "**No critical issues identified**\n"
-        
-        return assessment_text
-    
-    def _generate_recommendations(self, governance_audit, security_audit, rai_assessment) -> str:
-        """Generate recommendations based on audit results"""
-        
-        recommendations = []
-        
-        # Governance recommendations
-        if governance_audit.get('lineage_integrity', {}).get('status') != 'pass':
-            recommendations.append("Investigate and resolve lineage integrity issues")
-        
-        # Security recommendations
-        if security_audit.get('overall_security_status') != 'pass':
-            if security_audit.get('access_control', {}).get('failed_access_attempts', 0) > 0:
-                recommendations.append("Review and strengthen access control policies")
-            if security_audit.get('encryption', {}).get('status') != 'pass':
-                recommendations.append("Ensure all sensitive data is properly encrypted")
-        
-        # RAI recommendations
-        if 'overall_assessment' in rai_assessment:
-            rai_recs = rai_assessment['overall_assessment'].get('recommendations', [])
-            recommendations.extend(rai_recs)
-        
-        if not recommendations:
-            return "**No specific recommendations** - System performing within acceptable parameters"
-        
-        rec_text = ""
-        for i, rec in enumerate(recommendations, 1):
-            rec_text += f"{i}. {rec}\n"
-        
-        return rec_text
-    
-    def _identify_critical_issues(self, governance_audit, security_audit, rai_assessment) -> List[str]:
-        """Identify critical issues from all audits"""
-        
-        critical_issues = []
-        
-        # Governance critical issues
-        if governance_audit.get('lineage_integrity', {}).get('status') == 'fail':
-            critical_issues.append("Data lineage integrity compromised")
-        
-        # Security critical issues
-        if security_audit.get('overall_security_status') == 'fail':
-            critical_issues.append("Security compliance failure")
-        
-        if security_audit.get('phi_protection', {}).get('status') == 'fail':
-            critical_issues.append("PHI protection inadequate")
-        
-        # RAI critical issues
-        if rai_assessment.get('overall_assessment', {}).get('overall_status') == 'needs_improvement':
-            if rai_assessment.get('overall_assessment', {}).get('bias_score', 1) < 0.3:
-                critical_issues.append("High bias detected in AI decisions")
-            
-            if rai_assessment.get('overall_assessment', {}).get('robustness_score', 1) < 0.3:
-                critical_issues.append("Poor system robustness under stress conditions")
-        
-        return critical_issues
-    
-    def _generate_overall_assessment(self, governance_audit, security_audit, rai_assessment) -> Dict[str, Any]:
-        """Generate overall system assessment"""
-        
-        return self._generate_executive_summary({}, governance_audit, security_audit, rai_assessment)
+            return "**No ingestion data available**\n"
 
-if __name__ == "__main__":
-    # Test report generator
-    from pathlib import Path
-    
-    reports_path = Path("/Users/vasundras/Desktop/pb-11-mmgovernancepipeline/reports")
-    generator = ReportGenerator(reports_path)
-    
-    print("Report generator test completed")
+        rows = []
+        for modality, result in ingestion_results.get('results', {}).items():
+            v = result.get('validation', {})
+            if modality == 'healthcare':
+                detail = (f"{v.get('total_records')} records, {v.get('exact_duplicate_records')} exact duplicates, "
+                          f"{v.get('invalid_ages')} invalid ages, {v.get('unparseable_dates')} unparseable dates")
+            elif modality == 'barcodes':
+                detail = f"{v.get('decoded_images')} of {v.get('total_images')} images decoded ({', '.join(v.get('formats_detected', []))})"
+            elif modality == 'video_frames':
+                detail = (f"{v.get('frames_extracted')} frames sampled from {v.get('total_frames_in_video')} "
+                          f"({v.get('duration_seconds')} s at {v.get('fps')} fps)")
+            else:
+                detail = (f"{v.get('valid_subjects')} subjects, {v.get('total_samples')} samples, "
+                          f"{v.get('missing_values')} missing values")
+            rows.append([modality, 'PASS' if result.get('status') == 'success' else 'FAIL', detail])
+        return _table(['Modality', 'Status', 'Detail'], rows)
+
+    def _format_security_audit(self, security_audit: Dict[str, Any]) -> str:
+        if not security_audit:
+            return "**No security audit data available**\n"
+
+        text = ""
+        phi = security_audit['phi_protection']
+        text += f"**PHI Protection**: {phi['status'].upper()} - {phi['note']}\n\n"
+        if phi.get('verification'):
+            v, k = phi['verification'], phi['k_anonymity']
+            text += (f"- Identifiers looked for after redaction: {v['identifiers_checked']}; found: {v['residual_identifiers']}\n"
+                     f"- Contact details or exact dates found: {v['residual_patterns'] or 'none'}\n"
+                     f"- k-anonymity over {', '.join(k['quasi_identifiers'])}: k = {k['k']} "
+                     f"({k['groups']} groups; {k['records_in_groups_under_5']} records in groups smaller than 5)\n"
+                     f"- Pseudonym key: {phi['pseudonym_key_source']}\n")
+        if phi.get('barcode_screening'):
+            b = phi['barcode_screening']
+            text += f"- Labels screened: {b['labels_screened']}; quarantined for personal data: {b['quarantined']}\n"
+
+        enc = security_audit['encryption']
+        text += f"\n**Encryption**: {enc['status'].upper()} - {enc['note']}\n\n"
+        text += f"- {enc['kdf']}; key: {enc['key_source']}\n"
+        for e in enc['encrypted_files']:
+            text += f"- `{e['file']}` (decrypts back: {'yes' if e['roundtrip_verified'] else 'NO'})\n"
+
+        ac = security_audit['access_control']
+        text += (f"\n**Access Control**: {ac['status'].upper()}\n\n"
+                 f"- Decisions logged: {ac['total_access_attempts']}; denied: {ac['failed_access_attempts']}\n")
+        for d in ac['denied']:
+            text += f"  - denied: {d}\n"
+        return text
+
+    def _format_governance_audit(self, governance_audit: Dict[str, Any]) -> str:
+        if not governance_audit or governance_audit.get('overall_status') == 'not_run':
+            return f"**Not run**: {governance_audit.get('reason', 'no data')}\n"
+
+        lineage = governance_audit['lineage_integrity']
+        text = (f"**Lineage Integrity**: {lineage['status'].upper()} - every event's hash recomputed "
+                f"({lineage['events_checked']} events in the ledger, {governance_audit['run_events_count']} from this run)\n")
+        if not lineage['valid']:
+            text += f"- First bad event: {lineage['first_bad_seq']} ({lineage['problem']})\n"
+        prov = governance_audit['data_provenance']
+        text += f"\n**Data Provenance**: {prov['status'].upper()}\n\n"
+        text += _table(['Modality', 'Stages recorded in this run'],
+                       [[m, ', '.join(s)] for m, s in prov['stages_by_modality'].items()])
+        if prov['missing_stages']:
+            text += f"\nMissing: {prov['missing_stages']}\n"
+        scan = governance_audit['plaintext_phi_scan']
+        text += (f"\n**Plaintext PHI scan**: {scan['status'].upper()} - {scan.get('files_scanned', 0)} files searched "
+                 f"for {scan.get('names_looked_for', 0)} patient and doctor names\n")
+        return text
+
+    def _format_inference_results(self, inference_results: Dict[str, Any]) -> str:
+        if not inference_results:
+            return "**No inference results available**\n"
+
+        text = ""
+        pm = inference_results.get('prescription_matching')
+        if pm:
+            s = pm['summary']
+            text += (f"### Prescription matching\n\n"
+                     f"{s['prescriptions_auto_verified']} of {s['prescriptions']} prescriptions ({_pct(s['match_success_rate'])}) "
+                     f"can be verified by scanning the medication's label.\n\n")
+            text += _table(['Label', 'Format', 'Result', 'Medication', 'Why'],
+                           [[l['file'], l['format'], l['status'], l['medication'] or '-', l['reason']]
+                            for l in pm['label_results']])
+            text += "\n" + _table(['Medication', 'Prescriptions', 'Verified by label'],
+                                  [[r['medication'], r['prescription_count'],
+                                    'yes' if r['match_status'] == 'confirmed' else 'no'] for r in pm['matching_results']])
+        elif inference_results.get('skipped', {}).get('prescription_matching'):
+            text += f"### Prescription matching\n\nNot run: {inference_results['skipped']['prescription_matching']}\n"
+
+        br = inference_results.get('barcode_robustness')
+        if br:
+            text += f"\n### Label robustness\n\nShare of the {br['labels_tested']} labels that still decode to the same payload:\n\n"
+            text += _table(['Condition', 'Decoded'], [[c, _pct(r)] for c, r in br['conditions'].items()])
+            text += "\n" + _table(['Format', 'Decoded across all conditions'], [[f, _pct(r)] for f, r in br['per_format'].items()])
+
+        nav = inference_results.get('navigation_analysis')
+        if nav:
+            s = nav['summary']
+            text += (f"\n### Navigation\n\n{s['frames_processed']} frames; {s['people_detected_per_frame']} people detected per frame; "
+                     f"the cart yields in {s['frames_with_people_in_path']} frames (a person in its path).\n\n")
+            text += _table(['Degraded view', 'Same decision', 'Missed yields', 'Extra yields'],
+                           [[c.replace('_', ' '), _pct(v['same_decision']), v['missed_yields'], v['extra_yields']]
+                            for c, v in s['robustness_by_condition'].items()])
+            if nav.get('staged_keyframes'):
+                text += f"\nKeyframes (pixelated, with the detections and the path zone drawn): {', '.join('`' + k + '`' for k in nav['staged_keyframes'])}\n"
+
+        tel = inference_results.get('telemetry_analysis')
+        if tel and 'test_balanced_accuracy' in tel['summary']:
+            s = tel['summary']
+            text += (f"\n### Motion monitor (MHEALTH chest accelerometer)\n\n"
+                     f"Threshold {s['threshold_acc_std']} m/s² fitted on subjects {', '.join(s['train_subjects'])}; "
+                     f"balanced accuracy on subjects {', '.join(s['test_subjects'])}: **{s['test_balanced_accuracy']:.3f}** "
+                     f"(per subject {s['worst_subject_accuracy']:.3f} to {s['best_subject_accuracy']:.3f}).\n\n")
+            text += _table(['Sensor condition', 'Balanced accuracy'],
+                           [['clean', f"{s['test_balanced_accuracy']:.3f}"]] +
+                           [[c, f"{a:.3f}"] for c, a in tel['degradation'].items()])
+        return text
+
+    def _format_rai_assessment(self, rai_assessment: Dict[str, Any]) -> str:
+        if not rai_assessment:
+            return "**No Responsible AI assessment available**\n"
+
+        overall = rai_assessment['overall_assessment']
+        text = f"**Overall RAI Status**: {overall['overall_status'].upper()}\n\n"
+
+        bias = rai_assessment['bias_analysis'].get('demographic_bias')
+        if bias and bias.get('groups'):
+            text += (f"### Fairness across patient groups\n\nOutcome: {bias['outcome']} "
+                     f"(overall {_pct(bias['overall_rate'])}).\n\n")
+            text += _table(['Attribute', 'Lowest group', 'Highest group', 'Gap', 'Ratio (four-fifths rule: ≥ 0.8)'],
+                           [[attr, f"{g['lowest_group']} ({_pct(g['rates'][g['lowest_group']]['auto_verified_rate'])})",
+                             f"{g['highest_group']} ({_pct(g['rates'][g['highest_group']]['auto_verified_rate'])})",
+                             _pct(g['parity_difference']), g['disparate_impact_ratio']]
+                            for attr, g in bias['groups'].items()])
+            text += f"\nStatus: {bias['bias_status'].replace('_', ' ')}\n"
+
+        disparity = rai_assessment['bias_analysis'].get('subject_disparity', {})
+        if 'balanced_accuracy_by_subject' in disparity:
+            text += ("\n### Fairness across people (motion monitor)\n\n" +
+                     _table(['Subject', 'Balanced accuracy'],
+                            [[s, f"{a:.3f}"] for s, a in disparity['balanced_accuracy_by_subject'].items()]))
+
+        explanations = rai_assessment['explainability_analysis']['individual_explanations']
+        text += f"\n### Explanations ({len(explanations)})\n\n"
+        text += "".join(f"- [{e['severity']}] {e['explanation_text']}\n" for e in explanations) or "- none\n"
+        return text
+
+    def _generate_recommendations(self, verdict: Dict[str, Any], inference: Dict[str, Any],
+                                  rai_assessment: Dict[str, Any]) -> str:
+        recommendations = []
+        for check in verdict['checks']:
+            if check['check'] == 'Encryption at rest' and check['status'] != 'pass':
+                recommendations.append("Set MEDICAL_CART_ENCRYPTION_KEY (and MEDICAL_CART_PSEUDONYM_KEY) from a secrets store")
+            if check['check'] == 'Lineage hash chain' and check['status'] == 'fail':
+                recommendations.append("Investigate the lineage ledger: an event changed after it was recorded")
+            if check['check'] == 'PHI redaction verified' and check['status'] == 'fail':
+                recommendations.append("Do not release the staged records: identifying values survived redaction")
+        recommendations += inference.get('cross_modal_insights', {}).get('recommendations', [])
+        recommendations += rai_assessment.get('overall_assessment', {}).get('recommendations', [])
+        recommendations = list(dict.fromkeys(recommendations))
+
+        if not recommendations:
+            return "**No specific recommendations** - every check passed\n"
+        return "".join(f"{i}. {rec}\n" for i, rec in enumerate(recommendations, 1))
