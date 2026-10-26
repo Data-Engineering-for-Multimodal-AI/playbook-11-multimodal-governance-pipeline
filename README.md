@@ -73,7 +73,7 @@ Without them the run still works. It uses one-time keys, and the encryption chec
 python medical_cart_pipeline.py
 ```
 
-This takes about 12 seconds on a laptop CPU. You'll see one line per check (see [Expected output](#expected-output)), the journey, and where the reports went.
+This takes about 12 seconds on a laptop CPU, or about 45 seconds the first time after installing, while Python compiles and caches the libraries. You'll see one line per check (see [Expected output](#expected-output)), the journey, and where the reports went.
 
 | Command | What it runs |
 |---|---|
@@ -135,7 +135,7 @@ This output is from the first run on an empty ledger. Someone who rewrites every
 
 | Date | OS | Python | Result |
 |---|---|---|---|
-| 2026-10-26 | macOS 26.5.1 (Apple M3) | 3.12.15 and 3.13.16 | `make smoke` (8 tests); full run 12 s, output below |
+| 2026-10-26 | macOS 26.5.1 (Apple M3) | 3.12.15 and 3.13.16 | `make smoke` (8 tests); fresh clone with `pip install -r requirements.txt` (10 s), first run 46 s, later runs 11-12 s; output below |
 | 2026-10-26 | Ubuntu (GitHub Actions) | 3.12, 3.13 | `make smoke`, full run, lineage demo, and every printed command after `pip install -r requirements.txt` |
 
 The versions are pinned in `uv.lock` and `requirements.txt`: pandas 3.1, NumPy 2.5, OpenCV 5.0 (contrib), zxing-cpp 3.1 and cryptography 50.
