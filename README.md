@@ -1,716 +1,248 @@
 # Autonomous Medical Cart Multimodal Pipeline
 
-A comprehensive pipeline for Eighteen Labs' Autonomous Medical Cart that processes multimodal healthcare data through ingestion, governance, security, inference, and responsible AI stages.
+**Chapter 11 playbook** from *Data Engineering for Multimodal AI* (O'Reilly, 2026). Page numbers to be confirmed.
+Book: https://oreil.ly/data-engineering-multimodal
 
-## Table of Contents
+> Want the code exactly as printed? Use the `first-edition` tag. This branch is the 2026 maintenance update; see [Differences from the printed book](#differences-from-the-printed-book).
 
-- [Overview](#overview)
-- [Features](#features)
-- [Installation](#installation)
-- [Quick Start](#quick-start)
-- [Usage](#usage)
-- [Architecture](#architecture)
-- [Data Sources](#data-sources)
-- [Security Features](#security-features)
-- [Governance & Audit](#governance--audit)
-- [Responsible AI](#responsible-ai)
-- [Output Structure](#output-structure)
-- [Configuration](#configuration)
-- [API Reference](#api-reference)
-- [Contributing](#contributing)
-- [License](#license)
+## What you'll build
 
-## Overview
+A governed data pipeline for Eighteen Labs' autonomous medical cart (a fictional company). The cart takes a prescription, fetches the medication, drives to the patient and hands it over. Four kinds of data feed it, and every step is checked, logged and audited:
 
-This pipeline demonstrates an end-to-end autonomous medical cart journey from prescription receipt to medication delivery, incorporating:
+| Data | What the cart does with it |
+|---|---|
+| 55,500 patient records (CSV) | Redacts them, encrypts them, and checks that nothing identifying is left |
+| 6 medication labels (barcode images) | Decodes them, screens them for personal data, and verifies each one against the pharmacy formulary |
+| Camera video | Detects people in its path and decides to yield or proceed |
+| Body-worn sensor logs (MHEALTH) | Tells "still" from "moving", so a handover happens only when the cart is still |
 
-- **Multimodal Data Processing**: Healthcare records, barcode scanning, video navigation, and telemetry data
-- **Governance & Lineage**: Immutable tracking with hash-chained events in SQLite
-- **Security & Privacy**: PHI redaction, encryption, and role-based access control
-- **AI Inference**: Prescription matching, navigation analysis, and stability monitoring
-- **Responsible AI**: Bias detection, explainability, and robustness evaluation
-- **Comprehensive Auditing**: JSON and Markdown reports with pass/fail results
+On top of that, it builds:
 
-## Features
+- **Security:**
+  - Keyed pseudonyms for patients, doctors and hospitals; age bands; years instead of dates.
+  - A check that fails if any of the 111,073 names survives, and a k-anonymity measurement.
+  - Encryption with keys read from environment variables.
+  - Role-based access in which every decision, granted or denied, is logged.
+- **Governance:**
+  - An append-only lineage ledger whose hashes cover every field, and a demo of it catching tampering.
+  - Provenance per modality.
+  - A scan of everything the run wrote, looking for plaintext names.
+- **Responsible AI:**
+  - Whether automatic verification works equally well for every patient group.
+  - Explanations for each failure.
+  - Stress tests: blurred, covered and rotated labels; blocked, blurred and dark camera views; noisy and lossy sensors.
+- **One verdict:** the console, both reports and the exit code all come from the same list of checks.
 
-### Core Capabilities
-- **Multimodal Data Ingestion**: Process CSV, images, video, and sensor data
-- **Data Governance**: Immutable lineage tracking with SQLite
-- **Security Controls**: PHI redaction, AES encryption, role-based access
-- **AI Inference**: TF-IDF matching, OpenCV analysis, telemetry processing
-- **Bias Detection**: Demographic, route, and temporal bias analysis
-- **Explainable AI**: Detailed failure explanations and root cause analysis
-- **Audit Reports**: Comprehensive JSON and Markdown reporting
+## Quick start
 
-### Compliance Standards
-- **HIPAA**: PHI detection, redaction, and audit logging
-- **SOC 2**: Access controls, encryption, and monitoring
-- **AI Ethics**: Bias detection, explainability, and fairness assessment
-- **Medical Device**: Safety monitoring, reliability testing, and audit trails
+You need Python 3.12 or newer and about 250 MB of disk space for the environment. The sample data (90 MB) is in the repository; nothing is downloaded.
 
-## Installation
+```bash
+# Clone the repository
+git clone https://github.com/Data-Engineering-for-Multimodal-AI/playbook-11-multimodal-governance-pipeline.git
+cd playbook-11-multimodal-governance-pipeline
 
-### Prerequisites
+# Create and activate a virtual environment, then install dependencies
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+pip install -r requirements.txt
 
-- Python 3.8 or higher
-- Git
-- 2GB+ disk space for sample data
+# Verify installation
+python medical_cart_pipeline.py --help
+```
 
-### Setup Steps
+With [uv](https://docs.astral.sh/uv/): `uv sync`, then prefix commands with `uv run`. The Makefile has shortcuts: `make run`, `make pipeline`, `make journey`, `make verify`, `make tamper-demo`, `make smoke`.
 
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/your-org/pb-11-mmgovernancepipeline.git
-   cd pb-11-mmgovernancepipeline
-   ```
+### 1. Set the keys (optional, recommended)
 
-2. **Create virtual environment** (recommended)
-   ```bash
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   ```
+```bash
+cp .env.example .env    # then fill in both values
+set -a; . ./.env; set +a
+```
 
-3. **Install dependencies**
-   ```bash
-   pip install -r requirements.txt
-   ```
+| Variable | Used for |
+|---|---|
+| `MEDICAL_CART_ENCRYPTION_KEY` | The passphrase for `staged_data/secure/*.enc` (PBKDF2-HMAC-SHA256, 600,000 iterations, a random salt per file, Fernet) |
+| `MEDICAL_CART_PSEUDONYM_KEY` | The secret behind the pseudonyms (HMAC-SHA256), so nobody can rebuild them from a list of names |
 
-4. **Verify installation**
-   ```bash
-   python medical_cart_pipeline.py --help
-   ```
+Without them the run still works. It uses one-time keys, and the encryption check warns that the files can't be decrypted afterwards.
 
-### Dependencies
+### 2. Run the pipeline and the cart journey
 
-The project requires the following Python packages:
-- `pandas>=1.5.0` - Data manipulation and analysis
-- `scikit-learn>=1.0.0` - Machine learning algorithms
-- `opencv-python-headless>=4.5.0` - Computer vision processing
-- `cryptography>=3.4.0` - Encryption and security
-- `Pillow>=8.0.0` - Image processing
-- `pyzbar>=0.1.8` - Barcode decoding
-- `numpy>=1.21.0` - Numerical computing
-- `matplotlib>=3.5.0` - Data visualization
-- `seaborn>=0.11.0` - Statistical visualization
-
-## Quick Start
-
-### Basic Usage
-
-Run the complete pipeline with default settings:
 ```bash
 python medical_cart_pipeline.py
 ```
 
-### Common Commands
+This takes about 12 seconds on a laptop CPU. You'll see one line per check (see [Expected output](#expected-output)), the journey, and where the reports went.
+
+| Command | What it runs |
+|---|---|
+| `python medical_cart_pipeline.py --mode pipeline` | Only the data pipeline and its checks |
+| `python medical_cart_pipeline.py --mode journey` | The pipeline, then only the journey summary |
+| `python medical_cart_pipeline.py --user-role admin --verbose` | As another role (`admin`, `medical_staff` (default), `cart_operator`, `auditor`), with debug logging |
+
+**Exit codes:** 0 when every check passes or only warns, 1 when one fails.
+
+| Role | Records (redact and encrypt) | Labels, camera, sensors | Governance audit |
+|---|---|---|---|
+| `admin` | read, write | read, write | yes |
+| `medical_staff` | read, write | read | yes |
+| `cart_operator` | none | read, write | no |
+| `auditor` | none | read | yes |
+
+As `cart_operator`, the redaction is denied and logged. Nothing downstream ever sees unredacted records, so prescription matching and the fairness check report "not run".
+
+### 3. Read the reports
+
+| File | What's in it |
+|---|---|
+| `reports/audit_report_<run>.md` | Every check with its reason, plus tables for the labels, robustness, fairness and explanations |
+| `reports/audit_report_<run>.json` | The same data, machine-readable |
+| `reports/cart_journey_<run>.json` | The five journey stages and the verdict |
+| `staged_data/secure/healthcare_redacted.csv.enc` | The redacted records. They are only ever written encrypted |
+| `staged_data/navigation_frames/*.png` | 4 keyframes, pixelated, with the detections and the path zone drawn |
+| `governance.db`, `access_log.json` | The lineage ledger and the access log, kept across runs |
+
+To read the encrypted records, set the same `MEDICAL_CART_ENCRYPTION_KEY` and run:
 
 ```bash
-# Run with medical staff permissions
-python medical_cart_pipeline.py --user-role medical_staff
-
-# Run only the data processing pipeline
-python medical_cart_pipeline.py --mode pipeline
-
-# Run only the cart journey simulation
-python medical_cart_pipeline.py --mode journey
-
-# Enable detailed logging
-python medical_cart_pipeline.py --verbose
-
-# Run with administrator privileges
-python medical_cart_pipeline.py --user-role admin --verbose
+python security_module.py decrypt staged_data/secure/healthcare_redacted.csv.enc | head -3
 ```
 
-## Usage
-
-### Command Line Interface
+### 4. Verify the ledger, and watch it catch tampering
 
 ```bash
-python medical_cart_pipeline.py [OPTIONS]
-
-Options:
-  --mode {pipeline,journey,both}  Execution mode (default: both)
-  --user-role {admin,medical_staff,cart_operator,auditor}  User role (default: admin)
-  --verbose                       Enable detailed logging
-  --help                         Show help message
+python verify_lineage.py                # recompute every hash; exit 1 if the chain is broken
+python verify_lineage.py --tamper-demo  # works on a temporary copy
 ```
 
-### Execution Modes
-
-1. **Pipeline Mode**: Processes all data through ingestion, security, inference, and audit stages
-2. **Journey Mode**: Simulates complete autonomous cart delivery journey
-3. **Both Mode**: Runs pipeline processing followed by journey simulation
-
-### User Roles
-
-- **admin**: Full system access including encryption/decryption
-- **medical_staff**: Healthcare data access with audit capabilities
-- **cart_operator**: Navigation and telemetry data access
-- **auditor**: Read-only access for compliance verification
-
-## Architecture
-
-### System Components
-
 ```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│  Data Sources   │    │  Core Pipeline  │    │    Reports      │
-├─────────────────┤    ├─────────────────┤    ├─────────────────┤
-│ Healthcare CSV  │───▶│ Data Ingestion  │───▶│ JSON Reports    │
-│ Barcode Images  │    │ Security Module │    │ Markdown Audit  │
-│ Video Frames    │    │ Inference AI    │    │ Journey Logs    │
-│ MHealth Sensors │    │ Responsible AI  │    │ Access Logs     │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-                              │
-                       ┌─────────────────┐
-                       │   Governance    │
-                       │   Database      │
-                       │  (SQLite +      │
-                       │  Hash Chain)    │
-                       └─────────────────┘
+1. Ledger as recorded: VALID (11 events recomputed)
+
+   Edited the metadata of event 5 (phi_redaction/healthcare_csv)
+2. After editing: BROKEN at event 5 - content changed after it was recorded
+
+   Recomputed event 5's hash to match the edit
+3. After re-hashing it: BROKEN at event 6 - link to the previous event doesn't match
+
+   Deleted event 5 from a fresh copy
+4. After deleting: BROKEN at event 6 - sequence gap: expected event 5, found 6
 ```
 
-### Module Details
+This output is from the first run on an empty ledger. Someone who rewrites every later event as well can hide an edit. To catch that, keep a copy of the latest hash somewhere else, for example a signed log.
 
-#### 1. Pipeline Architecture (`pipeline_architecture.py`)
-- **Purpose**: Foundation layer providing database setup and lineage tracking
-- **Key Features**:
-  - SQLite governance database initialization
-  - Hash-chained event recording for immutable audit trails
-  - Modular component coordination
-  - Data modality and processing stage management
+## Tested on
 
-#### 2. Data Ingestion (`data_ingestion.py`)
-- **Purpose**: Load and validate multimodal data sources
-- **Processes**:
-  - Healthcare CSV: Loads 55K+ patient records with validation
-  - Barcode Images: Extracts metadata from 6 barcode types
-  - Video Processing: Extracts frames from navigation video
-  - MHealth Data: Processes sensor telemetry from 10 subjects
-- **Output**: Staged, validated data ready for processing
+| Date | OS | Python | Result |
+|---|---|---|---|
+| 2026-10-26 | macOS 26.5.1 (Apple M3) | 3.12.15 and 3.13.16 | `make smoke` (8 tests); full run 12 s, output below |
+| 2026-10-26 | Ubuntu (GitHub Actions) | 3.12, 3.13 | `make smoke`, full run, lineage demo, and every printed command after `pip install -r requirements.txt` |
 
-#### 3. Security Module (`security_module.py`)
-- **Purpose**: Implement data protection and access controls
-- **Features**:
-  - PHI detection using regex patterns
-  - AES encryption with PBKDF2 key derivation
-  - Role-based access control matrix
-  - Complete access logging and audit trails
+The versions are pinned in `uv.lock` and `requirements.txt`: pandas 3.1, NumPy 2.5, OpenCV 5.0 (contrib), zxing-cpp 3.1 and cryptography 50.
 
-#### 4. Inference Module (`inference_module.py`)
-- **Purpose**: AI-powered analysis and matching
-- **Capabilities**:
-  - Prescription-to-barcode matching using TF-IDF similarity
-  - Corridor navigation analysis with OpenCV
-  - Robustness testing under occlusion conditions
-  - Telemetry stability analysis for safety monitoring
+## Differences from the printed book
 
-#### 5. Responsible AI (`responsible_ai.py`)
-- **Purpose**: Ensure ethical and robust AI behavior
-- **Functions**:
-  - Bias detection across demographics, routes, and time
-  - Explainable AI for failure case analysis
-  - Robustness evaluation under degraded conditions
-  - Fairness assessment and recommendations
+The commands printed in the book still work: `pip install -r requirements.txt`, `python medical_cart_pipeline.py` and all its options. The module and class names are unchanged. What changed is that the checks are now real. In the printed version, most of them reported success without doing the work:
 
-#### 6. Report Generator (`report_generator.py`)
-- **Purpose**: Comprehensive audit and compliance reporting
-- **Outputs**:
-  - Detailed JSON reports with machine-readable results
-  - Human-friendly Markdown summaries
-  - Executive dashboards with key metrics
-  - Pass/fail status tracking across all components
+| Area | Printed version | Now |
+|---|---|---|
+| Install | `requirements.txt` listed a package that doesn't exist (`sqlite3-to-pandas`) and standard-library modules, and pinned pandas 2.0.3 (no wheel for Python 3.12) | Pinned and locked; Python 3.12 and 3.13 |
+| Running | The default workspace was an absolute path on the author's machine | The repository folder |
+| PHI redaction | A `[A-Z][a-z]+` pattern missed 99.9% of the names (they have mixed case); doctors and dates were kept; the pseudonyms were unsalted MD5; the raw CSV was copied in plaintext to `staged_data/` | Keyed pseudonyms; years and length of stay instead of dates; a verification step; nothing unredacted written |
+| Encryption | Password and salt were hard-coded, and a plaintext copy stayed next to each encrypted file | Keys from environment variables, a random salt per file, a decryption check, no plaintext copies |
+| Lineage | The hash left out the metadata; validation never recomputed it; events were ordered by timestamp text | Every field hashed, ordered by sequence, recomputed on each audit; tamper demo |
+| Barcodes | The scans were hard-coded strings with made-up confidences; the images were never read | Decoded with zxing-cpp, screened for personal data, checked against `sample-data/formulary.csv` and GS1 check digits |
+| Telemetry | The MHEALTH logs stayed inside the zip, so 0 subjects were analysed and the stage reported success | Read from the zip: 10 subjects, 1.2 million samples |
+| Video | "Corridor width" from vertical lines in a video that shows an outdoor plaza; crashed on OpenCV 5 | People in the cart's path, with a HOG person detector (OpenCV contrib) |
+| Bias | Each group's made-up confidence minus 0.7, so identical outcomes still scored "high bias" | The gap in real outcomes between groups, and the four-fifths ratio |
+| Access log | Every entry said success; a denied request raised an error before it was logged | Every decision logged, granted or denied |
+| Verdict | "Pipeline execution completed successfully!" with exit code 0 even when the pipeline reported FAILED; the report's summary and final status disagreed | One verdict for the console, the reports and the exit code |
+| Modes | `both` ran the whole pipeline twice | Once |
 
-## Data Sources
+Some parts of the printed version were removed:
 
-All sample data is included in the `./sample-data/` directory:
+- **Navigation "route bias".** It measured the frame width and the edge density, which aren't route choices.
+- **The explainability score.** There is now a written reason for each failure instead.
+- **The README's API reference.** It described functions that don't exist.
 
-### Healthcare Dataset (`healthcare_dataset.csv`)
-- **Source**: [Kaggle Healthcare Dataset](https://www.kaggle.com/datasets/prasad22/healthcare-dataset)
-- **Size**: 55,000+ patient records
-- **Fields**: Patient demographics, prescriptions, medical conditions
-- **Usage**: Prescription matching and bias detection
-- **Privacy**: Contains synthetic PHI for redaction testing
+`sample-data/formulary.csv` and `verify_lineage.py` are new.
 
-### Barcode Images (`bar-codes/`)
-- **Source**: ZXing test barcode images (PNG/JPEG)
-- **Types**: QR Code, Code128, Code39, DataMatrix, EAN13, ITF
-- **Format**: PNG images with embedded medication information
-- **Usage**: Prescription-to-medication matching validation
-- **Quality**: High-resolution test images for computer vision
+## Data and licenses
 
-### Video Data (`samples_data_vtest.avi`)
-- **Source**: Frames extracted from OpenCV vtest.avi
-- **Content**: Corridor navigation footage
-- **Usage**: Navigation analysis and robustness testing
-- **Processing**: Frame extraction every 7 frames for analysis
-- **Features**: Includes scenarios for occlusion testing
+| File | Source | License |
+|---|---|---|
+| `sample-data/healthcare_dataset.csv` | [Healthcare Dataset](https://www.kaggle.com/datasets/prasad22/healthcare-dataset), Kaggle (prasad22): synthetic records; the names are generated, not real patients | CC0 1.0 |
+| `sample-data/mhealth+dataset.zip`, `sample-data/MHEALTHDATASET/README.txt` | [MHEALTH](https://archive.ics.uci.edu/dataset/319/mhealth+dataset), UCI Machine Learning Repository (Banos et al., 2014, doi:10.24432/C5TW22) | CC BY 4.0 |
+| `sample-data/bar-codes/*.png` | Test images from the [ZXing](https://github.com/zxing/zxing) project | Apache-2.0 |
+| `sample-data/samples_data_vtest.avi` | `vtest.avi` from OpenCV's [`samples/data`](https://github.com/opencv/opencv/tree/4.x/samples/data). Its resolution and length (768×576, 795 frames) match the PETS 2009 benchmark sequence S2.L1, filmed at the University of Reading. OpenCV doesn't state its source; we didn't find the PETS terms of use online | Distributed with OpenCV (Apache-2.0); PETS 2009 terms unconfirmed |
+| `sample-data/formulary.csv` | Written for this playbook (2026): a fictional formulary that assigns the four product-style test barcodes to four of the five medications | MIT, like the code |
 
-### MHealth Telemetry (`MHEALTHDATASET/`)
-- **Source**: [UCI MHEALTH Dataset](https://archive.ics.uci.edu/dataset/319/mhealth+dataset)
-- **Subjects**: 10 individuals with sensor data
-- **Sensors**: Accelerometer, gyroscope, magnetometer, ECG
-- **Sampling Rate**: 50 Hz across all modalities
-- **Activities**: 12 different physical activities (standing, walking, cycling, etc.)
-- **Usage**: Cart stability and safety monitoring
-- **Format**: Time-series CSV data with multiple sensor channels
-- **Sensor Placement**: Chest, right wrist, and left ankle positions
+Two of the ZXing test images carry personal data, and they are kept as committed:
 
-## Security Features
+- **`datamatrix-1.png`:** a name with an SSN-format number and dates.
+- **`qrcode-1.png`:** a contact card with a name, phone number and email.
 
-### PHI Protection
+The pipeline treats this as a finding. It quarantines both labels, never stores or prints their content, and stages only their format.
 
-The system implements comprehensive Protected Health Information (PHI) protection:
+## Expected output
 
-#### Detection Patterns
-- **Names**: First and last name identification
-- **Medical Conditions**: Disease and diagnosis recognition
-- **Demographics**: Age, gender, and identifying information
-- **Quasi-identifiers**: Combinations that could identify individuals
-
-#### Redaction Methods
-- **Name Pseudonymization**: Consistent hashing with salt
-- **Condition Generalization**: Specific conditions mapped to categories
-- **Age Binning**: Precise ages converted to ranges
-- **Data Minimization**: Removal of unnecessary identifying fields
-
-### Encryption
-
-#### Data at Rest
-- **Algorithm**: AES-128 via Fernet encryption
-- **Key Derivation**: PBKDF2 with SHA-256
-- **Salt Management**: Unique salts per encryption operation
-- **File Integrity**: Verification checksums for encrypted data
-
-#### Key Management
-- **Password-based**: User-provided passwords for key derivation
-- **Secure Storage**: Keys never stored in plaintext
-- **Access Control**: Role-based key access permissions
-- **Audit Trail**: Complete key usage logging
-
-### Access Control
-
-#### Role-Based Permissions
-
-| Role | Healthcare Data | Barcode Data | Video Data | Telemetry | Encryption | Audit |
-|------|----------------|--------------|------------|-----------|------------|-------|
-| **admin** | Full | Full | Full | Full | Yes | Full |
-| **medical_staff** | Read/Write | Read | Limited | Limited | No | Read |
-| **cart_operator** | Limited | Full | Full | Full | No | Limited |
-| **auditor** | Read-only | Read-only | Read-only | Read-only | No | Full |
-
-#### Access Logging
-- **Complete Tracking**: Every data access attempt logged
-- **Metadata Capture**: User, timestamp, action, data type
-- **Failure Recording**: Unauthorized access attempts documented
-- **Audit Integration**: Logs integrated into compliance reports
-
-## Governance & Audit
-
-### Lineage Tracking
-
-#### Immutable Event Chain
-The system maintains a complete audit trail through hash-chained events:
-
-```python
-Event Structure:
-- event_id: Unique identifier (UUID4)
-- timestamp: ISO format with microsecond precision
-- stage: Processing stage (ingestion, validation, encryption, etc.)
-- modality: Data type (healthcare_csv, barcode_image, etc.)
-- data_hash: SHA-256 hash of processed data
-- previous_hash: Hash of previous event (creating chain)
-- metadata: Processing-specific details
-```
-
-#### Chain Integrity
-- **Hash Verification**: Each event references previous event hash
-- **Tamper Detection**: Any modification breaks the chain
-- **Complete Provenance**: Full data journey reconstruction
-- **Audit Compliance**: Meets regulatory audit requirements
-
-### Database Schema
-
-#### Lineage Events Table
-```sql
-CREATE TABLE lineage_events (
-    event_id TEXT PRIMARY KEY,
-    timestamp TEXT NOT NULL,
-    stage TEXT NOT NULL,
-    modality TEXT NOT NULL,
-    data_hash TEXT NOT NULL,
-    previous_hash TEXT,
-    metadata TEXT
-);
-```
-
-#### Audit Queries
-- **Chain Validation**: Verify hash chain integrity
-- **Data Provenance**: Trace data from source to output
-- **Processing History**: Complete transformation timeline
-- **Compliance Reports**: Regulatory audit trail generation
-
-## Responsible AI
-
-### Bias Detection
-
-#### Demographic Bias Analysis
-- **Age Groups**: Delivery success rates across age ranges
-- **Gender Analysis**: Service equality across gender identities
-- **Medical Conditions**: Fair treatment regardless of diagnosis
-- **Geographic Patterns**: Equal service across locations
-
-#### Route Bias Detection
-- **Path Selection**: Consistent navigation choices
-- **Delivery Times**: Equal service times across routes
-- **Accessibility**: Accommodation for mobility limitations
-- **Priority Handling**: Fair emergency response protocols
-
-#### Temporal Bias Analysis
-- **Time of Day**: Consistent service across shifts
-- **Day of Week**: Equal weekend and weekday service
-- **Seasonal Patterns**: Service consistency over time
-- **Load Balancing**: Fair resource allocation during peak times
-
-### Explainable AI
-
-#### Failure Analysis
-The system provides detailed explanations for delivery failures:
-
-```python
-Explanation Categories:
-- Prescription Matching: Why medication pairing failed
-- Navigation Issues: Obstacle or path planning problems
-- Stability Problems: Cart safety or balance concerns
-- System Errors: Technical failure root causes
-- Environmental Factors: External conditions affecting delivery
-```
-
-#### Root Cause Analysis
-- **Multi-level Investigation**: Technical, procedural, and environmental factors
-- **Evidence Collection**: Relevant data points and metrics
-- **Impact Assessment**: Affected stakeholders and processes
-- **Recommendation Generation**: Specific improvement suggestions
-
-### Robustness Testing
-
-#### Occlusion Tolerance
-- **Central Obstruction**: 25% center area blocked
-- **Side Obstruction**: 25% edge area blocked
-- **Multiple Obstacles**: Combined obstruction scenarios
-- **Dynamic Occlusion**: Moving obstacle simulation
-
-#### Sensor Degradation
-- **Missing Sensors**: Operation with reduced sensor input
-- **Noisy Data**: Performance under signal interference
-- **Calibration Drift**: Long-term accuracy maintenance
-- **Failure Recovery**: Graceful degradation strategies
-
-## Output Structure
-
-The pipeline generates comprehensive outputs organized in the following structure:
+From `python medical_cart_pipeline.py` on 2026-10-26, macOS 26.5.1, Python 3.13.16, with no keys set. The log lines are left out; the run ID and paths differ on each run.
 
 ```
-project-root/
-├── reports/                              # Generated audit reports
-│   ├── audit_report_TIMESTAMP.json      # Machine-readable audit data
-│   ├── audit_report_TIMESTAMP.md        # Human-readable summary
-│   └── cart_journey_TIMESTAMP.json      # Detailed journey simulation
-├── staged_data/                          # Processed data outputs
-│   ├── healthcare_staged.csv            # Validated healthcare records
-│   ├── barcode_metadata.json           # Barcode processing results
-│   ├── video_frames_metadata.json      # Navigation analysis results
-│   ├── mhealth_telemetry.json          # Telemetry stability data
-│   ├── ingestion_summary.json          # Processing summary
-│   └── secure/                         # Encrypted and redacted data
-│       ├── healthcare_redacted.csv     # PHI-redacted healthcare data
-│       └── healthcare_encrypted.csv    # AES-encrypted data files
-├── governance.db                        # SQLite lineage database
-├── access_log.json                     # Security access audit log
-└── frame_*.png                         # Extracted video frames
+Pipeline Status: PASS WITH WARNINGS
+  [PASS] Ingestion: All four modalities read - 4/4 modalities
+  [PASS] Security: Access control - 8 decisions logged, 3 denied (medical_staff write barcode_data; medical_staff write navigation_data; medical_staff write telemetry_data)
+  [PASS] Security: PHI redaction verified - 111073 patient, doctor and hospital names looked for, 0 found; no contact details or exact dates
+  [WARN] Security: Re-identification risk (k-anonymity, k >= 5) - k=1 over Age, Gender, Admission Year, Blood Type; 111 records in groups smaller than 5
+  [WARN] Security: Label payloads screened for personal data - 2 of 6 labels carry personal data and were quarantined
+  [WARN] Security: Encryption at rest - 1 file(s) encrypted; MEDICAL_CART_ENCRYPTION_KEY not set: one-time key, the files cannot be decrypted after this run
+  [PASS] Governance: Lineage hash chain - 11 events recomputed
+  [PASS] Governance: Provenance complete for this run - every modality went through its stages
+  [PASS] Governance: No plaintext names on disk - 7 files scanned
+  [WARN] Inference: Prescriptions verifiable by label - 43928 of 54966 (79.9%); 4 of 5 medications have a verified label
+  [PASS] Inference: Motion monitor on held-out subjects - balanced accuracy 0.991 on subjects 6, 7, 8, 9, 10
+  [PASS] Responsible AI: Fairness across patient groups - largest gap in auto-verification between groups 1.2%, lowest ratio 0.985
+  [PASS] Responsible AI: Fairness across people (motion monitor) - accuracy gap between subjects 0.019
+  [WARN] Responsible AI: Navigation robustness - same decision in 85% of degraded views; 11 missed yields
+  [WARN] Responsible AI: Label robustness - labels decoded in 53% of degraded scans
+  [WARN] Responsible AI: Sensor robustness - worst balanced accuracy with a degraded sensor 0.500
+
+Journey Status: DELIVERED_WITH_WARNINGS
+  Prescription Receipt: SUCCESS
+  Medication Retrieval: WARNING
+  Navigation To Patient: WARNING
+  Delivery Verification: SUCCESS
+  Return Journey: WARNING
+
+Pipeline finished: PASS WITH WARNINGS (9 passed, 7 warnings, 0 failed)
 ```
 
-### Report Contents
+With both keys set, the encryption check passes (10 passed, 6 warnings). Each warning is a real finding, and the Markdown report explains it:
 
-#### JSON Audit Report
-```json
-{
-  "metadata": {
-    "timestamp": "2025-01-XX...",
-    "user_role": "medical_staff",
-    "execution_mode": "both"
-  },
-  "pipeline_results": {
-    "ingestion": {"status": "SUCCESS", "details": "..."},
-    "security": {"status": "SUCCESS", "details": "..."},
-    "inference": {"status": "SUCCESS", "details": "..."},
-    "responsible_ai": {"status": "PASS_WITH_WARNINGS", "details": "..."}
-  },
-  "governance_audit": {
-    "lineage_integrity": "VERIFIED",
-    "event_count": 42,
-    "hash_chain_valid": true
-  },
-  "journey_simulation": {
-    "overall_status": "DELIVERED_SUCCESSFULLY",
-    "stage_results": {...}
-  }
-}
-```
-
-#### Markdown Summary Report
-- **Executive Summary**: High-level status and key findings
-- **Component Assessment**: Detailed analysis of each module
-- **Security Compliance**: PHI protection and access control verification
-- **Responsible AI Assessment**: Bias detection and robustness results
-- **Recommendations**: Specific improvement suggestions
-- **Compliance Status**: Regulatory requirement verification
-
-## Configuration
-
-### Environment Variables
-
-```bash
-# Optional: Custom data directory
-export MEDICAL_CART_DATA_DIR="/path/to/data"
-
-# Optional: Custom output directory
-export MEDICAL_CART_OUTPUT_DIR="/path/to/outputs"
-
-# Optional: Encryption password (not recommended for production)
-export MEDICAL_CART_ENCRYPTION_KEY="your-secure-password"
-```
-
-### Customization Options
-
-#### Security Module Customization
-```python
-# Modify PHI detection patterns in security_module.py
-PHI_PATTERNS = {
-    'name': r'\b[A-Z][a-z]+\s+[A-Z][a-z]+\b',
-    'condition': r'\b(diabetes|hypertension|asthma)\b',
-    # Add organization-specific patterns
-}
-```
-
-#### Inference Thresholds
-```python
-# Adjust matching sensitivity in inference_module.py
-PRESCRIPTION_MATCH_THRESHOLD = 0.7  # 70% similarity required
-NAVIGATION_CONFIDENCE_THRESHOLD = 0.8  # 80% confidence for navigation
-```
-
-#### Bias Detection Sensitivity
-```python
-# Configure bias detection in responsible_ai.py
-BIAS_DETECTION_THRESHOLDS = {
-    'demographic': 0.1,  # 10% difference triggers warning
-    'route': 0.15,       # 15% difference for route bias
-    'temporal': 0.2      # 20% difference for time-based bias
-}
-```
-
-## API Reference
-
-### Core Classes
-
-#### PipelineArchitecture
-```python
-class PipelineArchitecture:
-    def __init__(self, workspace_dir: str)
-    def record_lineage_event(self, stage: ProcessingStage, 
-                           modality: DataModality, 
-                           data_hash: str, 
-                           metadata: dict) -> str
-    def validate_lineage_integrity(self) -> bool
-```
-
-#### DataIngestionModule
-```python
-class DataIngestionModule:
-    def ingest_healthcare_data(self, filepath: str) -> dict
-    def ingest_barcode_images(self, directory: str) -> dict
-    def ingest_video_frames(self, filepath: str) -> dict
-    def ingest_mhealth_data(self, directory: str) -> dict
-```
-
-#### SecurityModule
-```python
-class SecurityModule:
-    def redact_phi(self, data: pd.DataFrame) -> pd.DataFrame
-    def encrypt_file(self, filepath: str, password: str) -> str
-    def check_access(self, user_role: SecurityRole, 
-                    data_type: str, action: str) -> bool
-```
-
-### Utility Functions
-
-#### Data Processing
-```python
-def validate_data_format(data: pd.DataFrame, expected_columns: list) -> bool
-def calculate_data_hash(data: any) -> str
-def extract_metadata(filepath: str) -> dict
-```
-
-#### Reporting
-```python
-def generate_executive_summary(results: dict) -> dict
-def create_audit_report(pipeline_results: dict, format: str) -> str
-def export_lineage_chain(output_file: str) -> bool
-```
-
-## Contributing
-
-### Development Setup
-
-1. **Fork the repository** and clone your fork
-2. **Create a feature branch** from main
-3. **Install development dependencies**:
-   ```bash
-   pip install -r requirements-dev.txt
-   ```
-4. **Run tests** to ensure everything works:
-   ```bash
-   python -m pytest tests/
-   ```
-
-### Code Standards
-
-- **Python Style**: Follow PEP 8 guidelines
-- **Documentation**: Comprehensive docstrings for all functions
-- **Type Hints**: Use type annotations for function signatures
-- **Error Handling**: Comprehensive exception handling
-- **Logging**: Appropriate logging levels and messages
-
-### Testing
-
-- **Unit Tests**: Test individual functions and methods
-- **Integration Tests**: Test module interactions
-- **Security Tests**: Verify PHI protection and access controls
-- **Performance Tests**: Ensure acceptable processing times
-
-### Pull Request Process
-
-1. **Update Documentation**: Ensure README and docstrings are current
-2. **Add Tests**: Include tests for new functionality
-3. **Security Review**: Verify no PHI leakage or security vulnerabilities
-4. **Performance Check**: Ensure no significant performance degradation
-
-## Troubleshooting
-
-### Common Issues
-
-#### Installation Problems
-```bash
-# OpenCV installation issues
-pip install opencv-python-headless --no-cache-dir
-
-# Barcode decoding issues
-apt-get install libzbar0  # Ubuntu/Debian
-brew install zbar         # macOS
-```
-
-#### Runtime Errors
-```bash
-# Permission errors with SQLite
-chmod 755 .
-chmod 644 governance.db
-
-# Missing video files
-ls -la sample-data/samples_data_vtest.avi
-```
-
-#### Performance Issues
-- **Large Data Files**: Consider processing subsets for testing
-- **Memory Usage**: Monitor RAM usage with large datasets
-- **Disk Space**: Ensure sufficient space for frame extraction
-
-### Support
-
-For technical support:
-1. **Check Documentation**: Review this README and inline code documentation
-2. **Search Issues**: Look for similar problems in the issue tracker
-3. **Create Issue**: Provide detailed error messages and system information
-4. **Security Issues**: Report privately for security-related problems
-
-## Citations
-
-This project uses the following datasets and resources:
-
-### MHEALTH Dataset
-```
-Banos, O., Garcia, R., & Saez, A. (2014). MHEALTH [Dataset]. 
-UCI Machine Learning Repository. https://doi.org/10.24432/C5TW22.
-```
-
-**Dataset Description**: The MHEALTH (Mobile Health) dataset comprises body motion and vital signs recordings for ten volunteers performing 12 physical activities. Sensors placed on the chest, right wrist, and left ankle measure acceleration, rate of turn, magnetic field orientation, and ECG signals at 50 Hz sampling rate.
-
-**Original Paper**: 
-```
-O. Baños, Rafael García, J. A. H. Terriza, M. Damas, H. Pomares, I. Rojas, 
-Alejandro Saez, Claudia Villalonga. (2014). mHealthDroid: A Novel Framework 
-for Agile Development of Mobile Health Applications. International Workshop 
-on Ambient Assisted Living and Home Care.
-```
-
-### Healthcare Dataset
-```
-Healthcare Dataset. (2023). Kaggle. 
-Retrieved from https://www.kaggle.com/datasets/prasad22/healthcare-dataset
-```
-
-**Dataset Description**: Synthetic healthcare records containing patient demographics, medical conditions, medications, and treatment information. Used for testing PHI redaction and prescription matching algorithms.
-
-### Barcode Test Images
-```
-ZXing Project. ZXing Test Barcode Images (PNG/JPEG format).
-Multiple barcode formats: QR Code, Code128, Code39, DataMatrix, EAN13, ITF.
-```
-
-**Dataset Description**: High-resolution test barcode images in various standard formats used for prescription-to-medication matching validation and computer vision testing.
-
-### Video Navigation Data
-```
-OpenCV Sample Video Data. Frames extracted from vtest.avi.
-Corridor navigation footage for robustness testing.
-```
-
-**Dataset Description**: Video frames extracted from OpenCV test footage showing corridor navigation scenarios. Used for navigation analysis, obstacle detection, and robustness testing under occlusion conditions.
-
-### Additional Resources
-
-**License**: Both datasets are used under their respective open licenses:
-- MHEALTH Dataset: [Creative Commons Attribution 4.0 International (CC BY 4.0)](https://creativecommons.org/licenses/by/4.0/)
-- Healthcare Dataset: Available under Kaggle's open dataset terms
-
-**Acknowledgments**: We thank the original dataset creators and the UCI Machine Learning Repository for making these valuable datasets available for research and development.
+- **k = 1.**
+  - Even without names, 111 records sit in groups of fewer than 5 records with the same age band, gender, admission year and blood type.
+  - The records are encrypted and internal; before releasing any of them, coarsen these fields.
+- **79.9% verifiable.**
+  - Lipitor has no label in the formulary, so its 11,038 prescriptions need a manual check.
+  - The 534 exact duplicate rows in the CSV are dropped before counting.
+- **Fairness.**
+  - Lipitor prescriptions are spread evenly across patient groups, so the gap stays at 1.2%.
+  - If one group received most of the Lipitor, this check would flag it.
+- **Navigation.**
+  - Of the 17 sampled frames with a person in the path, the cart misses the person in 7 when the centre of the view is blocked, and in 2 each with motion blur and in low light.
+  - HOG also misses some people in clear views. That is why the keyframes are pixelated whole: blurring only the detected people would leave the others recognizable.
+- **Labels.**
+  - Every label decodes slightly blurred (σ=1), rotated 10° or 90°, noisy (σ=15) or in low light.
+  - Covering 5% of the code stops all six.
+  - The 2-D codes survive more conditions (69%) than the 1-D codes (38 to 46%).
+- **Sensors.**
+  - The motion monitor uses one threshold: a 2-second window counts as still when the chest acceleration varies less than 0.2355 m/s².
+  - That threshold is so low that added noise of σ=0.2 m/s² brings it down to 0.672 balanced accuracy, and σ=0.5 to chance (0.500).
+  - Losing 20% or 50% of the samples doesn't hurt (0.991, 0.993).
+  - Robustness checks are stress tests on deliberately damaged inputs. They can warn but never fail the run.
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+MIT; see [LICENSE](LICENSE). The datasets keep their own licenses (above).
 
-### MIT License
-
-Copyright (c) 2025 Data Engineering for Multimodal AI
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-
----
-
-**Note**: This is a prototype implementation for demonstration purposes. Production deployment requires additional security hardening, compliance validation, and regulatory approval.
+This is a teaching prototype, not a medical device. Real deployments need a privacy and security review and regulatory approval.
