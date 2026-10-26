@@ -46,8 +46,10 @@ venv.bak/
 ehthumbs.db
 Thumbs.db
 
-# Project specific
+# Project specific (pipeline outputs)
 governance.db
+*.enc
+.pytest_cache/
 access_log.json
 staged_data/
 reports/
