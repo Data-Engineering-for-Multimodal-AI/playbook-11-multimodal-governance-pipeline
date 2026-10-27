@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026.10.1 (2026-10-27)
+
+### Changed
+- README, after checking against the book (Early Release, pages 433–445): page numbers; the commands
+  the book prints (page 443); the differences table's left column is the first edition.
+
 ## 2026.10 (2026-10-26)
 
 Maintenance update. The code as printed in the book is tagged `first-edition`. The printed commands and the module and class names are unchanged.
