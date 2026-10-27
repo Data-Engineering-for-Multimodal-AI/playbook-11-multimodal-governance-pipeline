@@ -159,7 +159,7 @@ The commands printed in the book still work: `python medical_cart_pipeline.py --
 | Verdict | "Pipeline execution completed successfully!" with exit code 0 even when the pipeline reported FAILED; the report's summary and final status disagreed | One verdict for the console, the reports and the exit code |
 | Modes | `both` ran the whole pipeline twice | Once |
 
-Some parts of the printed version were removed:
+Some parts of the first edition were removed:
 
 - **Navigation "route bias".** It measured the frame width and the edge density, which aren't route choices.
 - **The explainability score.** There is now a written reason for each failure instead.
