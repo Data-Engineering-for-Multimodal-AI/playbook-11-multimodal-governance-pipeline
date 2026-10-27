@@ -1,6 +1,6 @@
 # Autonomous Medical Cart Multimodal Pipeline
 
-**Chapter 11 playbook** from *Data Engineering for Multimodal AI* (O'Reilly, 2026). Page numbers to be confirmed.
+**Chapter 11 playbook** from *Data Engineering for Multimodal AI* (O'Reilly, 2026), pages 433–445 (Early Release page numbers; they may differ in the final print).
 Book: https://oreil.ly/data-engineering-multimodal
 
 > Want the code exactly as printed? Use the `first-edition` tag. This branch is the 2026 maintenance update; see [Differences from the printed book](#differences-from-the-printed-book).
@@ -142,9 +142,9 @@ The versions are pinned in `uv.lock` and `requirements.txt`: pandas 3.1, NumPy 2
 
 ## Differences from the printed book
 
-The commands printed in the book still work: `pip install -r requirements.txt`, `python medical_cart_pipeline.py` and all its options. The module and class names are unchanged. What changed is that the checks are now real. In the printed version, most of them reported success without doing the work:
+The commands printed in the book still work: `python medical_cart_pipeline.py --mode pipeline --user-role medical_staff` and `--mode journey --user-role medical_staff` (page 443), and the other options. The module and class names are unchanged. What changed is that the checks are now real. In the first edition (the code at the `first-edition` tag, which the book describes), most of them reported success without doing the work:
 
-| Area | Printed version | Now |
+| Area | First edition | Now |
 |---|---|---|
 | Install | `requirements.txt` listed a package that doesn't exist (`sqlite3-to-pandas`) and standard-library modules, and pinned pandas 2.0.3 (no wheel for Python 3.12) | Pinned and locked; Python 3.12 and 3.13 |
 | Running | The default workspace was an absolute path on the author's machine | The repository folder |
@@ -159,7 +159,7 @@ The commands printed in the book still work: `pip install -r requirements.txt`, 
 | Verdict | "Pipeline execution completed successfully!" with exit code 0 even when the pipeline reported FAILED; the report's summary and final status disagreed | One verdict for the console, the reports and the exit code |
 | Modes | `both` ran the whole pipeline twice | Once |
 
-Some parts of the printed version were removed:
+Some parts of the first edition were removed:
 
 - **Navigation "route bias".** It measured the frame width and the edge density, which aren't route choices.
 - **The explainability score.** There is now a written reason for each failure instead.
@@ -186,7 +186,7 @@ The pipeline treats this as a finding. It quarantines both labels, never stores 
 
 ## Expected output
 
-From `python medical_cart_pipeline.py` on 2026-10-26, macOS 26.5.1, Python 3.13.16, with no keys set. The log lines are left out; the run ID and paths differ on each run.
+From `python medical_cart_pipeline.py` on 2026-10-26, macOS 26.5.1, Python 3.13.16, with no keys set. The log lines are left out; the run ID and paths differ on each run. This is the output of this version; it may differ from the output printed in the book, and that's okay.
 
 ```
 Pipeline Status: PASS WITH WARNINGS
