@@ -1,5 +1,8 @@
 .PHONY: setup smoke run pipeline journey verify tamper-demo clean
 
+# A bare `make` runs the smoke test, as it did before the uniform targets were added.
+.DEFAULT_GOAL := smoke
+
 # Uniform targets for The Playbooks. The book's commands (pip install -r requirements.txt,
 # python medical_cart_pipeline.py --mode pipeline --user-role medical_staff,
 # python medical_cart_pipeline.py --mode journey --user-role medical_staff) still work as printed.
