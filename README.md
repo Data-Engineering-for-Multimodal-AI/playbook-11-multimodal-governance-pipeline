@@ -1,6 +1,6 @@
 # Autonomous Medical Cart Multimodal Pipeline
 
-**Chapter 11 playbook** from *Data Engineering for Multimodal AI* (O'Reilly, 2026), pages 433–445 (Early Release page numbers; they may differ in the final print).
+**Chapter 11 playbook** from *Data Engineering for Multimodal AI* (O'Reilly, 2026), pages 431–443.
 Book: https://oreil.ly/data-engineering-multimodal
 
 > Want the code exactly as printed? Use the `first-edition` tag. This branch is the 2026 maintenance update; see [Differences from the printed book](#differences-from-the-printed-book).
@@ -142,7 +142,7 @@ The versions are pinned in `uv.lock` and `requirements.txt`: pandas 3.1, NumPy 2
 
 ## Differences from the printed book
 
-The commands printed in the book still work: `python medical_cart_pipeline.py --mode pipeline --user-role medical_staff` and `--mode journey --user-role medical_staff` (page 443), and the other options. The module and class names are unchanged. What changed is that the checks are now real. In the first edition (the code at the `first-edition` tag, which the book describes), most of them reported success without doing the work:
+The commands printed in the book still work: `python medical_cart_pipeline.py --mode pipeline --user-role medical_staff` and `--mode journey --user-role medical_staff` (page 440), and the other options. The module and class names are unchanged. What changed is that the checks are now real. In the first edition (the code at the `first-edition` tag, which the book describes), most of them reported success without doing the work:
 
 | Area | First edition | Now |
 |---|---|---|
