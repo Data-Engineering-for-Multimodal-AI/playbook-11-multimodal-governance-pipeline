@@ -1,7 +1,11 @@
-# Autonomous Medical Cart Multimodal Pipeline
+# Playbook 11: Make a hospital robot's pipeline traceable, secure and fair
+**How to build governance, security and responsible AI into a multimodal pipeline.** Chapter 11 of [*Data Engineering for Multimodal AI*](https://oreil.ly/data-engineering-multimodal) (O'Reilly, 2026), pages 431–443.
 
-**Chapter 11 playbook** from *Data Engineering for Multimodal AI* (O'Reilly, 2026), pages 431–443.
-Book: https://oreil.ly/data-engineering-multimodal
+A cart that carries medicine through a hospital handles patient data, so every step has to be traceable, secure and fair. In this repo, we explore this with Eighteen Labs' autonomous medical cart. Follow along to add audit lineage, patient-data redaction, access and region rules, and bias and robustness checks to its pipeline.
+
+**The problem.** A pipeline that handles patient data has to prove where every record came from, who saw it, and that its decisions are fair.
+
+**What you'll work with.** You'll record lineage in an audit log that can't be changed, remove patient data at ingestion, encrypt data in transit, keep inference in approved regions, and test for bias and robustness.
 
 > Want the code exactly as printed? Use the `first-edition` tag. This branch is the 2026 maintenance update; see [Differences from the printed book](#differences-from-the-printed-book).
 
