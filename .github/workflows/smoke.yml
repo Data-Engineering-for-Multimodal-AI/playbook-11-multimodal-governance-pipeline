@@ -24,8 +24,39 @@ jobs:
       - uses: astral-sh/setup-uv@v10.3.0
       - name: Smoke test
         run: make smoke
-      - name: One-command run
-        run: make run
+      # README "Run it", steps 2 to 5, as written (the keys are set above, as in step 3)
+      - name: Run it, step 2 (make run)
+        run: |
+          set -o pipefail
+          make run 2>&1 | tee /tmp/run.txt
+          grep -q "PHI redaction verified - 111073 patient, doctor and hospital names looked for, 0 found" /tmp/run.txt
+          grep -q "Journey Status: DELIVERED_WITH_WARNINGS" /tmp/run.txt
+          grep -q "Pipeline finished: PASS WITH WARNINGS" /tmp/run.txt
+      - name: Run it, steps 3 to 5 (decrypt, verify, tamper demo, another role)
+        run: |
+          set -o pipefail
+          make pipeline 2>&1 | tee /tmp/pipeline.txt
+          grep -q "Encryption at rest - 1 file(s) encrypted; each one decrypts back to its content" /tmp/pipeline.txt
+          uv run python security_module.py decrypt staged_data/secure/healthcare_redacted.csv.enc > /tmp/decrypt_all.txt && head -3 /tmp/decrypt_all.txt | tee /tmp/decrypt.txt
+          grep -q "^Patient ID,Age,Gender" /tmp/decrypt.txt
+          grep -q "^PATIENT_" /tmp/decrypt.txt
+          make verify | tee /tmp/verify.txt
+          grep -q "Lineage ledger: VALID" /tmp/verify.txt
+          make tamper-demo | tee /tmp/tamper.txt
+          grep -q "After editing: BROKEN at event 5" /tmp/tamper.txt
+          uv run python medical_cart_pipeline.py --user-role cart_operator --mode pipeline 2>&1 | tee /tmp/role.txt
+          grep -q "cart_operator write healthcare_data" /tmp/role.txt
+      - name: Use your own data (file checks)
+        run: uv run --frozen pytest -q tests/test_own_data.py
+      - name: Try this 1 to 3
+        run: |
+          set -o pipefail
+          make try-k-anonymity | tee /tmp/t1.txt
+          grep -qE "^both of the last two +20 +7 +0" /tmp/t1.txt
+          make try-fairness-skew | tee /tmp/t2.txt
+          grep -qE "20% \(as is\) .* pass" /tmp/t2.txt
+          make try-sensor-noise | tee /tmp/t3.txt
+          grep -qE "^clean data \(the pipeline\) +0\.2355" /tmp/t3.txt
       - name: Full run and lineage checks (shown in the README)
         run: |
           uv run python medical_cart_pipeline.py
@@ -57,4 +88,5 @@ jobs:
         uses: devcontainers/ci@v0.3
         with:
           push: never
-          runCmd: make run
+          # The first output command, timed, as a reader would see it in a new Codespace
+          runCmd: start=$(date +%s) && make run && echo "Time to first output in a clean devcontainer was $(( $(date +%s) - start )) s"

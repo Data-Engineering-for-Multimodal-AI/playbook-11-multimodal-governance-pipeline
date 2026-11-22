@@ -5,6 +5,15 @@
 Nothing the book shows has changed.
 
 ### Added
+- `make check-data DIR=...` and `make load DIR=...`: check your own patient records (and optionally labels and a
+  formulary), then run the pipeline on them in `own_data/<name>/`, a workspace that links to your files
+  (`scripts/own_records.py`, `tests/test_own_data.py`). `make clean` also removes `own_data/`.
+- Three measured experiments: `make try-k-anonymity`, `make try-fairness-skew`, `make try-sensor-noise`
+  (`experiments/`).
+- README: numbered Run it steps, time tiers, Try this, Use your own data, What you end up with, Before production,
+  What it costs.
+- CI: runs the Run it steps with checks on their output, the three experiments and the own-data tests; the
+  devcontainer job prints the time to first output.
 - `make setup`. `make run` now depends on it and runs the same command as before (the pipeline,
   then the cart journey). `make clean`, `make smoke` and the other targets are unchanged, except
   that every `uv run` uses `--frozen`.
@@ -14,6 +23,8 @@ Nothing the book shows has changed.
   devcontainer and runs `make run` inside it.
 
 ### Changed
+- README: "What you'll build" is now "How it works", without the sentence the opening repeats. "Quick start" is now
+  "Run it the way the book does", with the same steps.
 - README opening: a title that says what you'll do, three sentences on why, the example and what you'll do, then the data engineering problem and what you'll work with.
 - Book page numbers now match the printed book (they were Early Release page numbers).
 

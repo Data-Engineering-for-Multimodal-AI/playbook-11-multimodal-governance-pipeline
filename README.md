@@ -7,11 +7,244 @@ A cart that carries medicine through a hospital handles patient data, so every s
 
 **What you'll work with.** You'll record lineage in an audit log that can't be changed, remove patient data at ingestion, encrypt data in transit, keep inference in approved regions, and test for bias and robustness.
 
-> Want the code exactly as printed? Use the `first-edition` tag. This branch is the 2026 maintenance update; see [Differences from the printed book](#differences-from-the-printed-book).
+> Following the book? Its steps are in [Run it the way the book does](#run-it-the-way-the-book-does) and still work as printed. Want the code exactly as printed? Use the `first-edition` tag. This branch is the 2026 maintenance update; see [Differences from the printed book](#differences-from-the-printed-book).
 
-## What you'll build
+## Run it
 
-A governed data pipeline for Eighteen Labs' autonomous medical cart (a fictional company). The cart takes a prescription, fetches the medication, drives to the patient and hands it over. Four kinds of data feed it, and every step is checked, logged and audited:
+You need [uv](https://docs.astral.sh/uv/) and `make`. No Docker, no GPU, no API keys, and nothing is downloaded: the sample data is in the repository. Or open the repo in a GitHub Codespace, where uv and `make` are ready. On Windows without `make`, use a Codespace or the book's steps below.
+
+**1. Get the code.** The clone is about 172 MB, including 90 MB of sample data.
+
+```bash
+git clone https://github.com/Data-Engineering-for-Multimodal-AI/playbook-11-multimodal-governance-pipeline.git
+cd playbook-11-multimodal-governance-pipeline
+```
+
+**2. Run the pipeline and the cart journey.** Installs the locked dependencies (`uv sync`) and runs `python medical_cart_pipeline.py`: ingestion of the four modalities, redaction and encryption, the lineage ledger, inference, the fairness and robustness checks, then the five journey stages. On a Mac this took 26 s with the environment installed, while other jobs were running.
+
+```bash
+make run
+```
+
+You should see one line per check, then the journey and the verdict:
+
+```
+  [PASS] Security: PHI redaction verified - 111073 patient, doctor and hospital names looked for, 0 found; no contact details or exact dates
+  [WARN] Security: Re-identification risk (k-anonymity, k >= 5) - k=1 over Age, Gender, Admission Year, Blood Type; 111 records in groups smaller than 5
+  [PASS] Governance: Lineage hash chain - 11 events recomputed
+  [PASS] Responsible AI: Fairness across patient groups - largest gap in auto-verification between groups 1.2%, lowest ratio 0.985
+Journey Status: DELIVERED_WITH_WARNINGS
+Pipeline finished: PASS WITH WARNINGS (9 passed, 7 warnings, 0 failed)
+```
+
+The 16 checks are listed and explained in [Expected output](#expected-output). The reports are in `reports/`.
+
+**3. Read the encrypted records.** Without keys the run encrypts with a one-time key, so nobody can read the file afterwards. Set both keys (any values; `.env.example` shows how to generate real ones), run the data pipeline again (`python medical_cart_pipeline.py --mode pipeline`), and decrypt the output (`python security_module.py decrypt`):
+
+```bash
+export MEDICAL_CART_ENCRYPTION_KEY=try-it-passphrase MEDICAL_CART_PSEUDONYM_KEY=try-it-pseudonym-key
+make pipeline
+uv run python security_module.py decrypt staged_data/secure/healthcare_redacted.csv.enc | head -3
+```
+
+```
+  [PASS] Security: Encryption at rest - 1 file(s) encrypted; each one decrypts back to its content
+Patient ID,Age,Gender,Blood Type,Medical Condition,Clinician ID,Facility ID,Insurance Provider,Billing Amount,Room Number,Admission Type,Medication,Test Results,Admission Year,Length of Stay (days)
+PATIENT_0DEFF681888A,30-49,Male,B-,ONCOLOGICAL_CONDITION,CLINICIAN_F6F70FEE2658,FACILITY_25CD1CB36ABD,Blue Cross,18856.281305978155,328,Urgent,Paracetamol,Normal,2024,2
+```
+
+Names became keyed pseudonyms, ages became bands and dates became the admission year and the length of stay. The pseudonyms depend on `MEDICAL_CART_PSEUDONYM_KEY`, so yours differ unless you use the same key. Billing amounts and room numbers are kept exactly as they were.
+
+**4. Check the ledger, then tamper with a copy.** `python verify_lineage.py` recomputes every hash in `governance.db`; `--tamper-demo` edits, re-hashes and deletes events in a temporary copy:
+
+```bash
+make verify
+make tamper-demo
+```
+
+```
+Lineage ledger: VALID (22 events recomputed)
+...
+2. After editing: BROKEN at event 5 - content changed after it was recorded
+3. After re-hashing it: BROKEN at event 6 - link to the previous event doesn't match
+4. After deleting: BROKEN at event 6 - sequence gap: expected event 5, found 6
+```
+
+22 events: the ledger keeps every run, and steps 2 and 3 each added 11.
+
+**5. Run as another role.** A cart operator may not touch patient records:
+
+```bash
+uv run python medical_cart_pipeline.py --user-role cart_operator --mode pipeline
+```
+
+```
+  [PASS] Security: Access control - 8 decisions logged, 2 denied (cart_operator write healthcare_data; cart_operator audit governance)
+  [WARN] Security: PHI redaction verified - healthcare records were not processed
+  [WARN] Responsible AI: Fairness across patient groups - not run (no redacted records)
+```
+
+The denied requests are in `access_log.json` with the granted ones. Try `--user-role auditor` and `admin`.
+
+**6. Clean up.**
+
+```bash
+make clean
+```
+
+This deletes `reports/`, `staged_data/`, `governance.db` (the ledger), `access_log.json` and the `own_data/` workspaces from [Use your own data](#use-your-own-data). The sample data and `.venv/` stay. Run `unset MEDICAL_CART_ENCRYPTION_KEY MEDICAL_CART_PSEUDONYM_KEY` to go back to one-time keys.
+
+## How much time do you have?
+
+| Time | What to do |
+|---|---|
+| 15 minutes | [Run it](#run-it), steps 1 to 5. On a Mac, each run of the pipeline took about 25 s. |
+| 1 hour | The three [Try this](#try-this) experiments (under 20 s together on a Mac), then the Markdown report in `reports/`. |
+| 1 day | [Use your own data](#use-your-own-data): run the checks on your own records, then work through [Before production](#before-production). |
+
+## Try this
+
+Each experiment changes one thing and measures the effect. They write nothing. The numbers below are from a Mac on 2026-11-21.
+
+**1. How coarse must the records be before nobody stands out?** After redaction there are no names, but a record can still be singled out by what an outsider may know. k is the size of the smallest group of records with the same quasi-identifier values; the pipeline warns when k < 5. This measures k for coarser and finer versions of them.
+
+```bash
+make try-k-anonymity
+```
+
+```
+quasi-identifiers               groups    k  records in groups under 5
+as the pipeline redacts            445    1                        111
++ medical condition               2412    1                        220
++ insurance provider              2028    1                        136
+age in 10-year bands               768    3                          7
+without blood type                  60    1                          5
+admission in 5-year periods        154    1                         25
+both of the last two                20    7                          0
+```
+
+All 111 records in small groups belong to the 116 patients under 18, who get a band of their own. Ten-year bands, which put 13- to 19-year-olds together, leave 7 records in small groups. Dropping blood type and reporting the admission in 5-year periods reaches k = 7. An outsider who also knows the diagnosis doubles the records at risk (220).
+
+**2. When does the fairness check notice an uneven gap?** The cart can't verify Lipitor by its label, and in the sample Lipitor is spread evenly, so every group is verified at about the same rate. This gives patients aged 70 and over more Lipitor, step by step, and reruns the same check.
+
+```bash
+make try-fairness-skew
+```
+
+```
+Lipitor share in group  group verified  others verified  largest gap  lowest ratio  verdict
+           20% (as is)           80.2%            79.8%         1.2%         0.985  pass
+                   25%           75.2%            79.8%         4.8%         0.940  pass
+                   30%           70.0%            79.8%         9.9%         0.876  pass
+                   35%           64.8%            79.8%        15.1%         0.811  warning
+                   40%           60.0%            79.8%        19.9%         0.751  warning
+                   50%           49.7%            79.8%        30.2%         0.622  fail
+```
+
+The check passes until the oldest patients are verified 10 points less often than everyone else, and only fails at a 30-point gap. Whether a 15-point gap for one group is acceptable is a decision for people, not a default in `responsible_ai.py`. Change `GROUP` in `experiments/fairness_skew.py` to test another group.
+
+**3. Can the motion monitor be made robust to a noisy sensor?** The monitor's threshold is fitted on clean data, and the pipeline's stress test shows it falling to chance with sensor noise. This also fits the threshold on noisy training data and scores both on the held-out subjects.
+
+```bash
+make try-sensor-noise
+```
+
+```
+threshold fitted on            threshold test noise 0.0 test noise 0.1 test noise 0.2 test noise 0.5
+clean data (the pipeline)         0.2355          0.991          0.992          0.672          0.500
+data with noise 0.2               0.3139          0.967          0.969          0.989          0.500
+data with noise 0.5               0.6139          0.940          0.940          0.941          0.958
+```
+
+Training with the noise you expect holds accuracy at that noise level and costs a few points on clean data. No single threshold works everywhere; measure the sensor you'll deploy, or fit one per sensor.
+
+## Use your own data
+
+Put your records in a folder, with the sample's columns:
+
+```
+my_records/
+  healthcare_dataset.csv   one row per admission
+  formulary.csv            optional: barcode_format, barcode_value, medication, pack
+  bar-codes/               optional: medication label images, .png (needs formulary.csv)
+```
+
+The pipeline needs the columns `Name`, `Age`, `Gender`, `Medical Condition`, `Medication`, `Doctor`, `Date of Admission` and `Discharge Date`, and uses `Hospital`, `Blood Type` and `Insurance Provider` when they are there. Without your own labels, the sample's labels and formulary are used, so only Aspirin, Ibuprofen, Paracetamol and Penicillin can be verified. Check the folder first. This reads every file and writes nothing:
+
+```bash
+make check-data DIR=my_records
+```
+
+It reports every problem it finds and stops if there is any. On a test folder with deliberately bad files:
+
+```
+8 problem(s) in bad_records; nothing was written:
+  healthcare_dataset.csv: column 'Email' looks identifying, and the redaction step doesn't handle it (it would stay in the output). Remove it or add it to redact_dataframe
+  healthcare_dataset.csv: Age: 1 value(s) not a number from 0 to 120, first 'forty' (row 5)
+  healthcare_dataset.csv: Date of Admission: 1 value(s) that aren't dates, first 'next Tuesday' (row 9)
+  healthcare_dataset.csv: 1 record(s) discharged before admission, first row 11
+  healthcare_dataset.csv: Medication: 1 empty value(s), first row 13
+  bar-codes/: needs a formulary.csv next to it to say which label is which medication
+  bar-codes/broken.png: can't open as an image
+  bar-codes/label2.jpg: not a .png; the pipeline reads only .png labels
+```
+
+It also checks for missing columns, files that aren't UTF-8 or aren't CSV, Git LFS pointers, fewer than 30 records, empty names, and medications that none of the formulary's labels cover. The `Email` check matters: with that column, a run of the pipeline fails its redaction check. When everything passes, run the pipeline on your records:
+
+```bash
+make load DIR=my_records
+```
+
+This builds a workspace in `own_data/my_records/` whose `sample-data/` links to your files (not copies, so no second plaintext copy is made) and to the sample video, sensor logs and, if you have none, labels. Then it runs `python medical_cart_pipeline.py --workspace own_data/my_records --mode pipeline`, with its own ledger and reports. On 5,000 records sampled from the sample data, this took 24 s on a Mac:
+
+```
+my_records: 5000 records, 5 medications; labels and formulary: the sample. All checks passed.
+Workspace: own_data/my_records/ (sample-data/ links to your files)
+  [PASS] Security: PHI redaction verified - 13978 patient, doctor and hospital names looked for, 0 found; no contact details or exact dates
+  [WARN] Security: Re-identification risk (k-anonymity, k >= 5) - k=1 over Age, Gender, Admission Year, Blood Type; 105 records in groups smaller than 5
+  [WARN] Inference: Prescriptions verifiable by label - 3959 of 4995 (79.3%); 4 of 5 medications have a verified label
+  [PASS] Responsible AI: Fairness across patient groups - largest gap in auto-verification between groups 3.4%, lowest ratio 0.958
+Pipeline finished: PASS WITH WARNINGS (9 passed, 7 warnings, 0 failed)
+```
+
+With fewer records the gaps between groups grow (3.4% instead of 1.2%), because each group is smaller. `python verify_lineage.py --workspace own_data/my_records` checks that workspace's ledger. Set the two keys first if you want to decrypt the output.
+
+## What you end up with
+
+A pipeline you can point at your own patient records that redacts and encrypts them, records every step in a tamper-evident ledger, logs every access decision, and reports fairness and robustness with numbers, plus measurements of where its privacy and fairness checks stop protecting you.
+
+Skills you'll practice:
+- Pseudonymizing and generalizing records, and measuring re-identification risk with k-anonymity
+- Encrypting data at rest with keys from the environment
+- Recording lineage in a hash chain and showing that it catches tampering
+- Logging access decisions by role
+- Measuring fairness across groups, and seeing what a threshold lets through
+- Stress-testing a model with degraded inputs, and training for them
+
+## Before production
+
+This playbook is a teaching prototype, not a medical device. Before you run something like it for real:
+
+1. **Generalize the quasi-identifiers before anyone outside sees the data.** k is 1, and all 111 exposed records are patients under 18; dropping blood type and using 5-year admission periods reaches k = 7 ([Try this 1](#try-this)). Billing amounts and room numbers are still exact (step 3). *Chapter 11, "Privacy-Preserving Machine Learning" (page 423).*
+2. **Redact every identifying column, not three.** `redact_dataframe` pseudonymizes `Name`, `Doctor` and `Hospital` and drops the dates; everything else passes through. A run with an `Email` column failed its redaction check, and the failure message still read "0 found; no contact details". *Chapter 11, "Protecting Data Across the Pipeline" (page 421).*
+3. **Keep the keys in a secrets store, and plan for rotation.** The keys come from environment variables. Changing `MEDICAL_CART_PSEUDONYM_KEY` changes every pseudonym, so records from before and after no longer link. *Chapter 11, "Protecting Data Across the Pipeline" (page 421).*
+4. **Anchor the ledger outside the database.** `verify_lineage.py` catches an edit, a re-hash and a deletion, but someone who rewrites every later event as well can hide a change. Publish the latest hash somewhere else, such as a signed log. *Chapter 11, "Lineage and Provenance Tracking" (page 416).*
+5. **Set fairness limits with the people affected.** With the defaults, patients over 70 verified 10 points less often than everyone else still pass, and a 20-point gap only warns ([Try this 2](#try-this)). *Chapter 11, "Bias Detection Across Modalities" (page 426).*
+6. **Train for the sensors you will have.** The motion threshold fitted on clean data scored 0.672 with noise of 0.2 m/s²; fitted on noisy data it scored 0.989 there and 0.967 on clean data ([Try this 3](#try-this)). *Chapter 11, "Adversarial Robustness" (page 429).*
+7. **Don't trust a HOG detector with safety.** In degraded views the cart missed people in its path 11 times. A cart that moves near people needs a stronger detector and a stop when it can't see. *Chapter 11, "Responsible and Transparent AI" (page 426).*
+8. **Enforce where inference runs.** The opening promises approved regions, but nothing in the code checks where a step runs or where data goes. Record the region with each lineage event and refuse the others. *Chapter 11, "Data Sovereignty" (page 418).*
+9. **Use real identities for access control.** Roles are a table in `AccessControl`, the role is a command-line flag, and the access log is a local JSON file. *Chapter 11, "Governance Architecture" (page 418).*
+
+## What it costs
+
+| Where you run it | Cost |
+|---|---|
+| Your machine | $0. Everything runs locally: no API keys, no paid services. The environment is about 242 MB. |
+| A GitHub Codespace (2 cores, 8 GB, the default size; this repo asks for no larger one) | Estimated $0.18 per hour at GitHub's list price (November 2026). A free personal account includes 120 core-hours a month, about 60 hours on this machine. |
+
+## How it works
+
+Eighteen Labs is a fictional company. Its cart takes a prescription, fetches the medication, drives to the patient and hands it over. Four kinds of data feed it, and every step is checked, logged and audited:
 
 | Data | What the cart does with it |
 |---|---|
@@ -37,7 +270,9 @@ On top of that, it builds:
   - Stress tests: blurred, covered and rotated labels; blocked, blurred and dark camera views; noisy and lossy sensors.
 - **One verdict:** the console, both reports and the exit code all come from the same list of checks.
 
-## Quick start
+## Run it the way the book does
+
+These are the book's steps (pages 431–443), as printed apart from the fixes listed in [Differences from the printed book](#differences-from-the-printed-book). [Run it](#run-it) above runs the same steps with `make`.
 
 You need Python 3.12 or newer and about 250 MB of disk space for the environment. The sample data (90 MB) is in the repository; nothing is downloaded.
 
@@ -55,7 +290,7 @@ pip install -r requirements.txt
 python medical_cart_pipeline.py --help
 ```
 
-With [uv](https://docs.astral.sh/uv/): `uv sync`, then prefix commands with `uv run`. The Makefile has shortcuts: `make run`, `make pipeline`, `make journey`, `make verify`, `make tamper-demo`, `make smoke`.
+With [uv](https://docs.astral.sh/uv/): `uv sync`, then prefix commands with `uv run`. The Makefile has shortcuts: `make run`, `make pipeline`, `make journey`, `make verify`, `make tamper-demo`, `make smoke`. `make check-data`, `make load` and `make try-*`: see [Use your own data](#use-your-own-data) and [Try this](#try-this); `uv run pytest -q tests/test_own_data.py` checks the file checks behind `make check-data`.
 
 ### 1. Set the keys (optional, recommended)
 
