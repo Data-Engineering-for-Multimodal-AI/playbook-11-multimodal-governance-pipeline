@@ -4,6 +4,8 @@ on:
   push:
   pull_request:
   workflow_dispatch:
+  schedule:
+    - cron: "0 6 * * 1"   # weekly, Monday 06:00 UTC, so breakage in upstream packages shows up
 
 jobs:
   smoke:
@@ -22,6 +24,8 @@ jobs:
       - uses: astral-sh/setup-uv@v10.3.0
       - name: Smoke test
         run: make smoke
+      - name: One-command run
+        run: make run
       - name: Full run and lineage checks (shown in the README)
         run: |
           uv run python medical_cart_pipeline.py
@@ -40,3 +44,17 @@ jobs:
           /tmp/pipenv/bin/python medical_cart_pipeline.py --user-role admin --verbose > /dev/null
           /tmp/pipenv/bin/python medical_cart_pipeline.py --user-role cart_operator --mode pipeline
           /tmp/pipenv/bin/python medical_cart_pipeline.py --user-role auditor --mode pipeline
+          /tmp/pipenv/bin/python medical_cart_pipeline.py --mode pipeline --user-role medical_staff
+          /tmp/pipenv/bin/python medical_cart_pipeline.py --mode journey --user-role medical_staff
+          git diff --exit-code
+
+  devcontainer:
+    # Builds .devcontainer/ the way Codespaces does and runs the playbook inside it.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build the devcontainer and run the playbook
+        uses: devcontainers/ci@v0.3
+        with:
+          push: never
+          runCmd: make run

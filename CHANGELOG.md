@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased (v1.1.0)
+
+Nothing the book shows has changed.
+
+### Added
+- `make setup`. `make run` now depends on it and runs the same command as before (the pipeline,
+  then the cart journey). `make clean`, `make smoke` and the other targets are unchanged, except
+  that every `uv run` uses `--frozen`.
+- `.devcontainer/` so the repo opens in GitHub Codespaces with dependencies installed.
+- CI: a weekly scheduled run, a `make run` step, the book's two page-443 commands in the printed
+  commands step with a check that the run leaves no tracked file changed, and a job that builds the
+  devcontainer and runs `make run` inside it.
+
 ## 2026.10.1 (2026-10-27)
 
 ### Changed

@@ -1,0 +1,10 @@
+{
+  "name": "Playbook 11: governed medical cart pipeline",
+  "image": "mcr.microsoft.com/devcontainers/python:3.12",
+  "onCreateCommand": "pip install --no-cache-dir uv==0.13.0",
+  "postCreateCommand": "make setup",
+  "customizations": {
+    "codespaces": { "openFiles": ["README.md"] },
+    "vscode": { "extensions": ["ms-python.python"] }
+  }
+}
