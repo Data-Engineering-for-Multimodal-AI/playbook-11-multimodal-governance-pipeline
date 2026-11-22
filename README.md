@@ -480,6 +480,8 @@ With both keys set, the encryption check passes (10 passed, 6 warnings). Each wa
   - Losing 20% or 50% of the samples doesn't hurt (0.991, 0.993).
   - Robustness checks are stress tests on deliberately damaged inputs. They can warn but never fail the run.
 
+If this playbook helped you, a star helps other readers find it.
+
 ## License
 
 MIT; see [LICENSE](LICENSE). The datasets keep their own licenses (above).
