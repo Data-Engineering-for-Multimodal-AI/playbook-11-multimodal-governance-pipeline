@@ -60,3 +60,6 @@ reports/
 *.temp
 *.bak
 *.backup
+
+# make load workspaces (they link to your own records)
+own_data/
