@@ -423,6 +423,8 @@ Two of the ZXing test images carry personal data, and they are kept as committed
 
 The pipeline treats this as a finding. It quarantines both labels, never stores or prints their content, and stages only their format.
 
+The full list, with sources, licenses and citations, is in [DATA_LICENSES.md](DATA_LICENSES.md).
+
 ## Expected output
 
 From `python medical_cart_pipeline.py` on 2026-10-26, macOS 26.5.1, Python 3.13.16, with no keys set. The log lines are left out; the run ID and paths differ on each run. This is the output of this version; it may differ from the output printed in the book, and that's okay.

@@ -63,3 +63,6 @@ reports/
 
 # make load workspaces (they link to your own records)
 own_data/
+
+# written by a passing `make run`; read by `make card` in the .github repo
+.playbook-done
