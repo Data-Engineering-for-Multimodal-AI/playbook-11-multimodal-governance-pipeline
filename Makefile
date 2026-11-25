@@ -18,6 +18,7 @@ smoke:
 # The full run: pipeline, then the cart journey (reports/ and staged_data/, both gitignored)
 run: setup
 	uv run --frozen python medical_cart_pipeline.py
+	@echo "playbook-11-multimodal-governance-pipeline" > .playbook-done
 
 pipeline:
 	uv run --frozen python medical_cart_pipeline.py --mode pipeline
