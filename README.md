@@ -1,5 +1,15 @@
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/img/header-dark.png">
+  <img src="docs/img/header-light.png" alt="Playbook 11 of 12, Chapter 11 of Data Engineering for Multimodal AI. Build: a governed, auditable pipeline. Data: video, sensors, barcodes and records." width="100%">
+</picture>
+
 # Playbook 11: Make a hospital robot's pipeline traceable, secure and fair
 **How to build governance, security and responsible AI into a multimodal pipeline.** Chapter 11 of [*Data Engineering for Multimodal AI*](https://oreil.ly/data-engineering-multimodal) (O'Reilly, 2026), pages 431–443.
+
+[![Tests](https://github.com/Data-Engineering-for-Multimodal-AI/playbook-11-multimodal-governance-pipeline/actions/workflows/smoke.yml/badge.svg?branch=main)](https://github.com/Data-Engineering-for-Multimodal-AI/playbook-11-multimodal-governance-pipeline/actions/workflows/smoke.yml)
+![Python 3.12 | 3.13](https://img.shields.io/badge/python-3.12%20%7C%203.13-1f1a19?labelColor=6b6361)
+[![License: MIT](https://img.shields.io/badge/license-MIT-1f1a19?labelColor=6b6361)](LICENSE)
+[![Open in GitHub Codespaces](https://img.shields.io/badge/Open%20in-Codespaces-b4422e?logo=github&labelColor=6b6361)](https://codespaces.new/Data-Engineering-for-Multimodal-AI/playbook-11-multimodal-governance-pipeline?quickstart=1)
 
 A cart that carries medicine through a hospital handles patient data, so every step has to be traceable, secure and fair. In this repo, we explore this with Eighteen Labs' autonomous medical cart. Follow along to add audit lineage, patient-data redaction, access and region rules, and bias and robustness checks to its pipeline.
 
@@ -244,6 +254,21 @@ This playbook is a teaching prototype, not a medical device. Before you run some
 
 ## How it works
 
+```mermaid
+flowchart LR
+  A["Sample data<br/>records, labels, video, sensors"] --> B["Ingestion<br/>read and hash each input"]
+  B --> C["Redaction and encryption<br/>keyed pseudonyms, Fernet"]
+  C --> D["Inference<br/>labels, camera, motion"]
+  D --> E["Responsible AI<br/>fairness and stress tests"]
+  E --> F["Audit reports<br/>Markdown, JSON, exit code"]
+  B -.-> L["Lineage ledger<br/>hash chain in SQLite"]
+  C -.-> L
+  D -.-> L
+  E -.-> L
+  classDef key fill:#ffe8e3,stroke:#b4422e,color:#1f1a19
+  class L key
+```
+
 Eighteen Labs is a fictional company. Its cart takes a prescription, fetches the medication, drives to the patient and hands it over. Four kinds of data feed it, and every step is checked, logged and audited:
 
 | Data | What the cart does with it |
@@ -423,7 +448,7 @@ Two of the ZXing test images carry personal data, and they are kept as committed
 
 The pipeline treats this as a finding. It quarantines both labels, never stores or prints their content, and stages only their format.
 
-The full list, with sources, licenses and citations, is in [DATA_LICENSES.md](DATA_LICENSES.md).
+The full list, with sources, licenses and citations, is in [DATA_SOURCES.md](DATA_SOURCES.md).
 
 ## Expected output
 
@@ -484,8 +509,21 @@ With both keys set, the encryption check passes (10 passed, 6 warnings). Each wa
 
 If this playbook helped you, a star helps other readers find it.
 
+## Troubleshooting
+
+**The run warns "MEDICAL_CART_ENCRYPTION_KEY is not set: using a one-time random key for this run".** The run still works, but the encrypted files can't be decrypted afterwards. Copy `.env.example` to `.env`, fill in both values, load it with `set -a; . ./.env; set +a`, and run `make run` again.
+
+**`python security_module.py decrypt` says "Wrong key: the file was encrypted with a different passphrase (or changed since)".** Set `MEDICAL_CART_ENCRYPTION_KEY` to the passphrase of the run that wrote the file. A file written with a one-time key can't be decrypted; run `make run` again with the key set.
+
+**`make verify` says "No ledger at ...: run python medical_cart_pipeline.py first".** The ledger is `governance.db`, written by the pipeline. Run `make run` first.
+
 ## License
 
 MIT; see [LICENSE](LICENSE). The datasets keep their own licenses (above).
 
 This is a teaching prototype, not a medical device. Real deployments need a privacy and security review and regulatory approval.
+
+---
+
+[The book](https://oreil.ly/data-engineering-multimodal) · [All playbooks](https://github.com/Data-Engineering-for-Multimodal-AI#playbooks) · Previous: [Playbook 10](https://github.com/Data-Engineering-for-Multimodal-AI/playbook-10-multimodal-inference-service) · Next: [Playbook 12](https://github.com/Data-Engineering-for-Multimodal-AI/playbook-12-multimodal-streamkit-ops-pipeline)
+<!-- Substack post for this playbook: add link here -->
